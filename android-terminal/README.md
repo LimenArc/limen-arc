@@ -41,16 +41,58 @@ app/src/main/java/com/limenArc/terminal/
 - **Min SDK**: 26 (Android 8.0)
 - **Target SDK**: 35 (Android 15)
 
-## Building
+## Building the APK
+
+### Option 1 — GitHub Actions (easiest, no SDK needed)
+
+Push to any branch. The workflow at `.github/workflows/build-apk.yml` runs
+automatically and uploads `limenarcterminal-debug.apk` as a downloadable artifact:
+
+```
+GitHub repo → Actions → Build APK → (latest run) → Artifacts → limenarcterminal-debug
+```
+
+Tag a release to get a permanent GitHub Release with the APK attached:
 
 ```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+---
+
+### Option 2 — Docker (no Android Studio needed)
+
+```bash
+# Build the image and extract the APK into ./out/
+./build-apk.sh --docker
+
+# or manually:
+docker build -t limenarcterminal-builder .
+mkdir -p out
+docker run --rm -v "$PWD/out:/out" limenarcterminal-builder
+# APK → out/limenarcterminal-debug.apk
+```
+
+---
+
+### Option 3 — Local Android SDK
+
+```bash
+# Requires: JDK 17+, Android SDK with platforms;android-35 + build-tools;34.0.0
+export ANDROID_HOME=~/Android/Sdk          # Linux
+# export ANDROID_HOME=~/Library/Android/sdk  # macOS
+
+./build-apk.sh          # auto-detects SDK
+# or
 ./gradlew assembleDebug
 ```
 
 APK output: `app/build/outputs/apk/debug/app-debug.apk`
 
-## Requirements
+---
+
+### Requirements (local build)
 
 - Android Studio Hedgehog or newer
 - JDK 17
-- Android SDK 35
+- Android SDK 35 + build-tools 34.0.0
