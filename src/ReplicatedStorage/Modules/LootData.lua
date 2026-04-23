@@ -41,6 +41,10 @@ Loot.LuckyBlock = {
 	{ Kind = "Monster", Id = "dragonspawn", Weight = 0.3,
 	  Message = "A DRAGONSPAWN joins your party!" },
 
+	-- Story: map fragments.
+	{ Kind = "Item", Id = "map_fragment", MinCount = 1, MaxCount = 1, Weight = 6,
+	  Message = "A weathered map fragment!" },
+
 	-- Mid-tier rewards
 	{ Kind = "Coins", MinCount = 80, MaxCount = 300, Weight = 22 },
 	{ Kind = "Item",  Id = "potion_hp_super", MinCount = 1, MaxCount = 2, Weight = 14 },

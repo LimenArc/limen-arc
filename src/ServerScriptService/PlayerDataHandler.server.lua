@@ -30,7 +30,7 @@ local function loadSave(userId: number): Inventory.PlayerSave
 			return store:GetAsync(keyFor(userId))
 		end)
 		if ok and type(data) == "table" then
-			return data :: any
+			return Inventory.MigrateSave(data)
 		end
 	end
 	local fresh = Inventory.NewSave(GameConfig.StartingCoins)
@@ -39,6 +39,7 @@ local function loadSave(userId: number): Inventory.PlayerSave
 	Inventory.AddItem(fresh, "trap_basic", 5)
 	Inventory.AddItem(fresh, "potion_hp", 3)
 	fresh.EquippedWeaponId = "stick"
+	fresh.LifetimeCoins = fresh.Coins
 	return fresh
 end
 
@@ -77,6 +78,10 @@ end
 function PlayerData.AddCoins(player: Player, amount: number)
 	local save = saves[player.UserId]; if not save then return end
 	save.Coins += amount
+	if amount > 0 then
+		save.LifetimeCoins += amount
+		if _G.Quests then _G.Quests.OnCoinsEarned(player, amount) end
+	end
 	pushSnapshot(player)
 end
 

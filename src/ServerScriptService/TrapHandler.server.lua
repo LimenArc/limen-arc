@@ -73,6 +73,7 @@ Remotes.Events.ThrowTrap.OnServerEvent:Connect(function(player, trapId, target)
 		target:Destroy()
 		Remotes.Events.CaptureResult:FireClient(player, true, def.Id, mon.Uuid)
 		Remotes.Events.Notify:FireClient(player, ("Caught %s!"):format(def.DisplayName))
+		if _G.Quests then _G.Quests.OnMonsterCaught(player, def.Id) end
 	else
 		-- Failed trap: aggroes the monster.
 		local root = target.PrimaryPart

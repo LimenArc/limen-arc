@@ -56,6 +56,46 @@ The mod menu uses a server-side allow-list (`Config.ModMenuAllowedUserIds`) so
 normal players can't turn it on — set your own UserId in
 `src/ReplicatedStorage/Modules/GameConfig.lua` before publishing.
 
+## Story: The Mire Plague
+
+Long before, the Archipelago of Aethel was peopled. A pale fog drifted from a
+cave no one remembered digging; anyone who breathed it turned into one of the
+30 monster species. You are one of the few still-human survivors, answering the
+scholars' beacon. Catch what the infected became, trade with who's left, and
+choose how the plague ends.
+
+Source: `Modules/QuestData.lua` (story, NPCs, 13 quests, 4 endings).
+
+### The four endings
+
+| Ending | Trigger |
+| --- | --- |
+| **The Cure** | Collect all 4 map fragments (from lucky blocks), talk to the Envoy at the last cave. |
+| **The Warden's Pact** | Discover all 30 species, complete *The Compendium* with Elin. |
+| **Ashes** | Refuse the cure — defeat 40 wild monsters, complete *Ashes* with the Envoy. |
+| **Dominion** | Accumulate 10,000 lifetime coins after accepting *Dominion* from Tavi. |
+
+Each ending plays a full-screen cutscene with tinted typography and writes
+`EndingAchieved` to the player's save.
+
+### NPCs
+
+- **Tavi** (market, east stall) — offers the Beacon, Merchant's Muscle, and the
+  Dominion hint.
+- **Sagewind** (market, west stall) — starter healer, offers *First Catch*.
+- **Marla** (first camp) — wants a Frostkit.
+- **Bren** (first cabin) — the Last Farmer, wants 3 Sprout Cubs.
+- **Elin** (first cave) — sealed scholar, offers the Census, Compendium,
+  Fragment Hunt, Dark Count, and Cartographer quests.
+- **Envoy at the Heart** (last cave, near a boss Boulderion named "Heart of the
+  Mire") — the Cure and Ashes choice-point.
+
+### Quest journal
+
+Press `J` or tap the purple **QUEST** button to open the journal. Active and
+completed quests appear with live objective progress. Dialogue panels open
+automatically when you walk up to an NPC's proximity prompt.
+
 ## Lakes, rivers, boats
 
 `WorldBuilder` lays down 4 lakes with sandy beaches and a meandering river from

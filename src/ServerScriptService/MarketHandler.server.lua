@@ -58,6 +58,7 @@ Remotes.Events.MarketBuy.OnServerEvent:Connect(function(player, itemId, qty)
 
 	if not flags.InfiniteMoney then
 		save.Coins -= total
+		if _G.Quests then _G.Quests.OnCoinsSpent(player, total) end
 	end
 	_G.PlayerData.GiveItem(player, itemId, qty)
 	Remotes.Events.Notify:FireClient(player, ("Bought %d × %s."):format(qty, itemId))
