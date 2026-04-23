@@ -1,0 +1,93 @@
+name: Luau check
+
+# Runs the Luau compiler on every source file to catch syntax / parse errors
+# before they hit Roblox Studio. Also runs the Luau analyzer for type-level
+# lints — those are reported but don't fail the build, since Roblox-global
+# types (game, Instance, etc.) aren't known to the standalone analyzer and
+# produce false positives.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  parse-check:
+    name: Parse every .lua file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Luau
+        run: |
+          curl -fsSL -o /tmp/luau.zip \
+            https://github.com/luau-lang/luau/releases/latest/download/luau-ubuntu.zip
+          unzip -q /tmp/luau.zip -d /tmp/luau
+          chmod +x /tmp/luau/luau /tmp/luau/luau-compile /tmp/luau/luau-analyze
+          echo "/tmp/luau" >> "$GITHUB_PATH"
+
+      - name: Parse every source file
+        id: parse
+        run: |
+          set +e
+          fail=0
+          total=0
+          while IFS= read -r -d '' f; do
+            total=$((total+1))
+            out=$(luau-compile -O0 "$f" 2>&1)
+            # luau-compile dumps bytecode text, but real parse errors contain
+            # words like "SyntaxError" / "expected" / "unexpected".
+            if echo "$out" | grep -qE "SyntaxError|unexpected|expected token|parse error|lexer error"; then
+              echo "::error file=$f::Parse error"
+              echo "$out" | grep -iE "syntax|expected|unexpected|parse|lexer" | head -5
+              fail=$((fail+1))
+            fi
+          done < <(find src -type f -name "*.lua" -print0)
+          echo ""
+          echo "Parsed $total file(s); $fail failed."
+          if [ "$fail" -gt 0 ]; then exit 1; fi
+
+      - name: Type analyzer (informational)
+        if: always() && steps.parse.conclusion == 'success'
+        run: |
+          set +e
+          total=0
+          issues=0
+          # Drop lines about Roblox globals or optional struct fields Luau
+          # can't verify without type stubs.
+          filter='Unknown global|Unknown type|Unknown require|Unknown symbol .(game|script|workspace|typeof|task|Instance|Vector3|Vector2|CFrame|Color3|UDim|UDim2|Enum|Random|TweenInfo|Ray).|Property .* is not present|has no field|type pack|Cannot call non-function|This type has no|ImportUnused|LocalUnused|SameLineStatement'
+          while IFS= read -r -d '' f; do
+            total=$((total+1))
+            findings=$(luau-analyze --formatter=plain "$f" 2>&1 \
+              | grep -vE "$filter" \
+              | grep -E ":[0-9]+:[0-9]+:")
+            if [ -n "$findings" ]; then
+              echo "— $f"
+              echo "$findings" | head -5
+              issues=$((issues+1))
+            fi
+          done < <(find src -type f -name "*.lua" -print0)
+          echo ""
+          echo "Analyzed $total file(s); $issues had non-trivial findings."
+          # Non-fatal.
+
+      - name: Cross-file consistency
+        run: |
+          echo "=== Remote events: declared vs used ==="
+          grep -oE '^\t"[A-Z][A-Za-z]+",' src/ReplicatedStorage/Remotes.lua \
+            | tr -d '\t",' | sort -u > /tmp/declared
+          grep -rhoE 'Remotes\.Events\.[A-Z][A-Za-z]+' src \
+            | sed 's/Remotes\.Events\.//' | sort -u > /tmp/used
+          undeclared=$(comm -23 /tmp/used /tmp/declared)
+          if [ -n "$undeclared" ]; then
+            echo "::error::These remote events are referenced but not declared in Remotes.lua:"
+            echo "$undeclared"
+            exit 1
+          fi
+          echo "OK — every Remotes.Events.* referenced is declared."
+
+          echo ""
+          echo "=== Monster / item id references resolve ==="
+          python3 scripts/check_ids.py
