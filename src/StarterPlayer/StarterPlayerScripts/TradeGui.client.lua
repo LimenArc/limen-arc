@@ -202,7 +202,9 @@ local function renderMyList()
 	end
 	for uuid in pairs(myOffer.Monsters) do
 		local mon = nil
-		for _, m in ipairs(save.Monsters) do if m.Uuid == uuid then mon = m break end end
+		for _, m in ipairs(save.Monsters) do
+			if m.Uuid == uuid then mon = m; break end
+		end
 		local def = mon and MonsterData.Get(mon.SpeciesId)
 		if def and mon then
 			local row = rowFactory(mineScroll, ("▲ %s  Lv %d  (click to remove)"):format(def.DisplayName, mon.Level),
