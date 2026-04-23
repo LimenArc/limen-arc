@@ -162,20 +162,34 @@ local function addSliderRow(flag: string, label: string, minV: number, maxV: num
 	button.Text = ""
 	button.Size = UDim2.new(1, 0, 1, 0)
 	button.Parent = bar
-	button.MouseButton1Down:Connect(function()
+	local function beginDrag(startX: number)
 		local dragging = true
-		setFromMouse(UserInputService:GetMouseLocation().X)
-		local move; local up
+		setFromMouse(startX)
+		local move, up
 		move = UserInputService.InputChanged:Connect(function(input)
-			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			if not dragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch then
 				setFromMouse(input.Position.X)
 			end
 		end)
 		up = UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 then
-				dragging = false; move:Disconnect(); up:Disconnect()
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+				if move then move:Disconnect() end
+				if up then up:Disconnect() end
 			end
 		end)
+	end
+
+	button.MouseButton1Down:Connect(function()
+		beginDrag(UserInputService:GetMouseLocation().X)
+	end)
+	button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			beginDrag(input.Position.X)
+		end
 	end)
 
 	-- initial fill

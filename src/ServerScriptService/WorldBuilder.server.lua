@@ -78,6 +78,8 @@ local MarketFolder = folder("Market", WorldRoot)
 local SpawnsFolder = folder("MonsterSpawns", WorldRoot)
 local WaterFolder = folder("Water", WorldRoot)
 local BoatsFolder = folder("Boats", WorldRoot)
+local ChestsFolder = folder("Chests", WorldRoot)
+local LuckyFolder = folder("LuckyBlocks", WorldRoot)
 
 -- Shared state that other systems read.
 local WorldState = {
@@ -541,6 +543,120 @@ local function placeDocksAndBoats()
 	buildBoat(Vector3.new(HALF - 40, 0, 0))
 end
 
+-- ── Chests & lucky blocks ────────────────────────────────────────────────
+local function buildChest(pos: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "Chest"
+
+	local base = Instance.new("Part")
+	base.Anchored = true
+	base.Size = Vector3.new(5, 3, 3.5)
+	base.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
+	base.Color = Color3.fromRGB(130, 90, 40)
+	base.Material = Enum.Material.Wood
+	base.Name = "ChestBase"
+	base.Parent = model
+
+	local lid = Instance.new("Part")
+	lid.Anchored = true
+	lid.Size = Vector3.new(5, 0.8, 3.5)
+	lid.CFrame = CFrame.new(pos + Vector3.new(0, 3.4, 0))
+	lid.Color = Color3.fromRGB(100, 65, 25)
+	lid.Material = Enum.Material.Wood
+	lid.Name = "ChestLid"
+	lid.Parent = model
+
+	local band = Instance.new("Part")
+	band.Anchored = true
+	band.Size = Vector3.new(5.2, 0.4, 3.7)
+	band.CFrame = CFrame.new(pos + Vector3.new(0, 2.6, 0))
+	band.Color = Color3.fromRGB(200, 170, 80)
+	band.Material = Enum.Material.Metal
+	band.Parent = model
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Open"
+	prompt.ObjectText = "Chest"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = base
+
+	model:AddTag("Chest")
+	model.PrimaryPart = base
+	model.Parent = ChestsFolder
+end
+
+local function buildLuckyBlock(pos: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "LuckyBlock"
+
+	local cube = Instance.new("Part")
+	cube.Anchored = true
+	cube.Size = Vector3.new(3, 3, 3)
+	cube.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
+	cube.Color = Color3.fromRGB(255, 215, 70)
+	cube.Material = Enum.Material.Neon
+	cube.Name = "LuckyCore"
+	cube.Parent = model
+
+	-- Decorative "?" billboard on top.
+	local label = Instance.new("BillboardGui")
+	label.Adornee = cube
+	label.Size = UDim2.fromOffset(80, 80)
+	label.StudsOffset = Vector3.new(0, 2.5, 0)
+	label.AlwaysOnTop = true
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Text = "?"
+	t.Font = Enum.Font.FredokaOne
+	t.TextSize = 56
+	t.TextColor3 = Color3.fromRGB(255, 255, 255)
+	t.TextStrokeTransparency = 0
+	t.Parent = label
+	label.Parent = cube
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Open"
+	prompt.ObjectText = "Lucky Block"
+	prompt.HoldDuration = 0.8
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = cube
+
+	-- Slow rotation for visual flair (done by a client-side script via
+	-- CollectionService, but also works if a motor is added later).
+	model:AddTag("LuckyBlock")
+	model.PrimaryPart = cube
+	model.Parent = LuckyFolder
+end
+
+local function scatterLoot()
+	-- Chests: 2 per camp (already have loot crates, but these are openable),
+	-- plus 1 at each cabin, plus 1 near each cave portal.
+	for _, campPos in ipairs(WorldState.CampPositions) do
+		buildChest(campPos + Vector3.new(rng:NextNumber(-6, 6), 0, rng:NextNumber(-6, 6)))
+	end
+	for _, cabinPos in ipairs(WorldState.CabinPositions) do
+		buildChest(cabinPos + Vector3.new(rng:NextNumber(8, 14), 0, rng:NextNumber(-4, 4)))
+	end
+	for _, portalPos in ipairs(WorldState.CavePortals) do
+		buildChest(portalPos + Vector3.new(0, 0, 8))
+	end
+
+	-- Lucky blocks: scattered randomly.
+	for _ = 1, 40 do
+		local x = rng:NextNumber(-HALF + 60, HALF - 60)
+		local z = rng:NextNumber(-HALF + 60, HALF - 60)
+		local biome = biomeAt(x, z)
+		if biome ~= "Shore" and math.sqrt(x * x + z * z) > 80 then
+			local h = math.noise(x * 0.01, z * 0.01) * 6 + 3
+			buildLuckyBlock(Vector3.new(x, h, z))
+		end
+	end
+end
+
 -- ── Scatter structures ───────────────────────────────────────────────────
 local function randomFlatPoint(minDist: number): Vector3
 	for _ = 1, 60 do
@@ -596,13 +712,16 @@ buildWaterways()
 buildMarket(MarketFolder)
 scatter()
 placeDocksAndBoats()
+scatterLoot()
 ensureSpawnLocation()
 
-print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d"):format(
+print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d chests=%d lucky=%d"):format(
 	#WorldState.SpawnAnchors,
 	#WorldState.CabinPositions,
 	#WorldState.CampPositions,
 	#WorldState.CavePortals,
 	#WorldState.LakeCenters,
-	#BoatsFolder:GetChildren()
+	#BoatsFolder:GetChildren(),
+	#ChestsFolder:GetChildren(),
+	#LuckyFolder:GetChildren()
 ))
