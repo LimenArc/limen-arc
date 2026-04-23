@@ -26,6 +26,17 @@ local Events = {
 	"RequestSave",          -- server → client: full PlayerSave snapshot
 	"CaptureResult",        -- server → client
 	"Notify",               -- server → client: chat-like toast
+
+	-- Trading
+	"TradeRequest",         -- client → server: ask user X to trade
+	"TradeRespond",         -- client → server: accept / decline incoming
+	"TradeOffer",           -- client → server: set my current offer
+	"TradeLock",            -- client → server: toggle my lock-in
+	"TradeConfirm",         -- client → server: final confirm (both sides)
+	"TradeCancel",          -- client → server: bail out
+	"TradeUpdate",          -- server → client: full session snapshot
+	"TradeIncoming",        -- server → client: someone wants to trade
+	"TradeEnded",           -- server → client: session closed (success/cancel)
 }
 
 local Functions = {

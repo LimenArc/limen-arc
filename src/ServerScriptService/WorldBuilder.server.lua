@@ -76,6 +76,8 @@ local StructuresFolder = folder("Structures", WorldRoot)
 local CavesFolder = folder("Caves", WorldRoot)
 local MarketFolder = folder("Market", WorldRoot)
 local SpawnsFolder = folder("MonsterSpawns", WorldRoot)
+local WaterFolder = folder("Water", WorldRoot)
+local BoatsFolder = folder("Boats", WorldRoot)
 
 -- Shared state that other systems read.
 local WorldState = {
@@ -85,6 +87,9 @@ local WorldState = {
 	CavePortals = {} :: { Vector3 },
 	CabinPositions = {} :: { Vector3 },
 	CampPositions = {} :: { Vector3 },
+	LakeCenters = {} :: { { Position: Vector3, Radius: number } },
+	RiverPath = {} :: { Vector3 },
+	BoatDocks = {} :: { Vector3 },
 	MarketCenter = Vector3.new(0, 4, 0),
 }
 _G.WorldState = WorldState
@@ -323,6 +328,219 @@ local function buildMarket(parent: Instance)
 	marker.Parent = parent
 end
 
+-- ── Lakes ────────────────────────────────────────────────────────────────
+local function buildLake(center: Vector3, radius: number)
+	-- Circular water surface disc + shore-height adjustment is implicit (the
+	-- biome map already paints sand at low elevations, but a real lake just
+	-- sits on top of the terrain). Add a single water disc + a few smaller
+	-- overlapping discs so the outline is organic.
+	local main = Instance.new("Part")
+	main.Shape = Enum.PartType.Cylinder
+	main.Anchored = true
+	main.Size = Vector3.new(2, radius * 2, radius * 2)
+	main.CFrame = CFrame.new(center + Vector3.new(0, -0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	main.Color = Color3.fromRGB(50, 100, 170)
+	main.Material = Enum.Material.Water
+	main.Transparency = 0.25
+	main.Name = "LakeSurface"
+	main.Parent = WaterFolder
+
+	for i = 1, 5 do
+		local lobe = Instance.new("Part")
+		lobe.Shape = Enum.PartType.Cylinder
+		lobe.Anchored = true
+		local r = radius * rng:NextNumber(0.5, 0.9)
+		local angle = rng:NextNumber(0, math.pi * 2)
+		local offset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * radius * 0.5
+		lobe.Size = Vector3.new(2, r * 2, r * 2)
+		lobe.CFrame = CFrame.new(center + offset + Vector3.new(0, -0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		lobe.Color = Color3.fromRGB(50, 100, 170)
+		lobe.Material = Enum.Material.Water
+		lobe.Transparency = 0.25
+		lobe.Name = "LakeSurface"
+		lobe.Parent = WaterFolder
+	end
+
+	-- Sandy beach ring.
+	local beach = Instance.new("Part")
+	beach.Shape = Enum.PartType.Cylinder
+	beach.Anchored = true
+	beach.Size = Vector3.new(1, (radius + 12) * 2, (radius + 12) * 2)
+	beach.CFrame = CFrame.new(center + Vector3.new(0, -1.8, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	beach.Color = Color3.fromRGB(230, 210, 160)
+	beach.Material = Enum.Material.Sand
+	beach.Parent = WaterFolder
+
+	table.insert(WorldState.LakeCenters, { Position = center, Radius = radius })
+end
+
+-- ── Rivers ───────────────────────────────────────────────────────────────
+-- Meandering strip from a source point to the nearest lake (or ocean edge).
+local function buildRiver(fromPos: Vector3, toPos: Vector3)
+	local dir = (toPos - fromPos)
+	local length = dir.Magnitude
+	local steps = math.floor(length / 18)
+	if steps < 2 then return end
+
+	local last = fromPos
+	for i = 1, steps do
+		local t = i / steps
+		-- Meander: sine-wave perpendicular offset.
+		local straight = fromPos:Lerp(toPos, t)
+		local perp = Vector3.new(-dir.Unit.Z, 0, dir.Unit.X)
+		local wobble = math.sin(t * math.pi * 3 + rng:NextNumber()) * 22 * (1 - math.abs(t - 0.5) * 0.8)
+		local point = straight + perp * wobble
+		point = Vector3.new(point.X, -0.4, point.Z)
+		table.insert(WorldState.RiverPath, point)
+
+		-- Rectangular segment from last to point.
+		local mid = (last + point) / 2
+		local segLen = (point - last).Magnitude + 4
+		local segment = Instance.new("Part")
+		segment.Anchored = true
+		segment.Size = Vector3.new(segLen, 1.5, 14)
+		local lookDir = (point - last)
+		segment.CFrame = CFrame.new(mid, mid + Vector3.new(lookDir.X, 0, lookDir.Z))
+			* CFrame.Angles(0, math.rad(90), 0)
+		segment.Color = Color3.fromRGB(60, 110, 180)
+		segment.Material = Enum.Material.Water
+		segment.Transparency = 0.25
+		segment.Name = "RiverSegment"
+		segment.Parent = WaterFolder
+
+		last = point
+	end
+end
+
+local function buildWaterways()
+	-- Pick 4 lakes distributed around the map (random but non-overlapping).
+	local lakeSpecs = {}
+	local attempts = 0
+	while #lakeSpecs < 4 and attempts < 200 do
+		attempts += 1
+		local r = rng:NextInteger(55, 95)
+		local pos = Vector3.new(
+			rng:NextNumber(-HALF + r + 80, HALF - r - 80),
+			-0.4,
+			rng:NextNumber(-HALF + r + 80, HALF - r - 80)
+		)
+		-- Keep away from market plaza + other lakes.
+		if pos.Magnitude < 120 then continue end
+		local ok = true
+		for _, other in ipairs(lakeSpecs) do
+			if (pos - other.Position).Magnitude < other.Radius + r + 80 then
+				ok = false; break
+			end
+		end
+		if ok then
+			table.insert(lakeSpecs, { Position = pos, Radius = r })
+		end
+	end
+	for _, lake in ipairs(lakeSpecs) do
+		buildLake(lake.Position, lake.Radius)
+	end
+
+	-- River from each lake toward the nearest ocean edge.
+	for _, lake in ipairs(lakeSpecs) do
+		local p = lake.Position
+		-- Closest cardinal edge.
+		local toEdge
+		local dx = HALF - math.abs(p.X); local dz = HALF - math.abs(p.Z)
+		if dx < dz then
+			toEdge = Vector3.new(math.sign(p.X) * HALF, -0.4, p.Z + rng:NextNumber(-60, 60))
+		else
+			toEdge = Vector3.new(p.X + rng:NextNumber(-60, 60), -0.4, math.sign(p.Z) * HALF)
+		end
+		buildRiver(p, toEdge)
+	end
+end
+
+-- ── Boats ────────────────────────────────────────────────────────────────
+-- A "boat" is a VehicleSeat on a floating hull. Anchored by default; the
+-- BoatHandler script unanchors it and drives it when a player sits.
+local function buildBoat(pos: Vector3)
+	local boat = Instance.new("Model")
+	boat.Name = "Boat"
+
+	local hull = Instance.new("Part")
+	hull.Anchored = true
+	hull.Size = Vector3.new(8, 2, 14)
+	hull.CFrame = CFrame.new(pos + Vector3.new(0, 1, 0))
+	hull.Color = Color3.fromRGB(110, 70, 40)
+	hull.Material = Enum.Material.Wood
+	hull.TopSurface = Enum.SurfaceType.Smooth
+	hull.BottomSurface = Enum.SurfaceType.Smooth
+	hull.Name = "Hull"
+	hull.Parent = boat
+
+	-- Bow wedge.
+	local bow = Instance.new("WedgePart")
+	bow.Anchored = true
+	bow.Size = Vector3.new(8, 2, 4)
+	bow.CFrame = CFrame.new(pos + Vector3.new(0, 1, -9)) * CFrame.Angles(0, math.rad(180), 0)
+	bow.Color = Color3.fromRGB(110, 70, 40)
+	bow.Material = Enum.Material.Wood
+	bow.Parent = boat
+
+	local bowWeld = Instance.new("WeldConstraint")
+	bowWeld.Part0 = hull; bowWeld.Part1 = bow; bowWeld.Parent = hull
+
+	-- Seat.
+	local seat = Instance.new("VehicleSeat")
+	seat.Anchored = true
+	seat.Size = Vector3.new(3, 1, 3)
+	seat.CFrame = CFrame.new(pos + Vector3.new(0, 2.5, 0))
+	seat.Color = Color3.fromRGB(80, 50, 30)
+	seat.Material = Enum.Material.Wood
+	seat.HeadsUpDisplay = false
+	seat.Parent = boat
+
+	local seatWeld = Instance.new("WeldConstraint")
+	seatWeld.Part0 = hull; seatWeld.Part1 = seat; seatWeld.Parent = hull
+
+	-- Flag pole.
+	local mast = Instance.new("Part")
+	mast.Anchored = true
+	mast.Size = Vector3.new(0.4, 8, 0.4)
+	mast.CFrame = CFrame.new(pos + Vector3.new(0, 6, 3))
+	mast.Color = Color3.fromRGB(90, 60, 30)
+	mast.Material = Enum.Material.Wood
+	mast.Parent = boat
+
+	local mastWeld = Instance.new("WeldConstraint")
+	mastWeld.Part0 = hull; mastWeld.Part1 = mast; mastWeld.Parent = hull
+
+	-- Tag so BoatHandler / client can find it.
+	boat:AddTag("Boat")
+	boat.PrimaryPart = hull
+	boat.Parent = BoatsFolder
+
+	return boat
+end
+
+local function placeDocksAndBoats()
+	-- One small wooden dock + a boat at each lake, plus 2 boats on the shore.
+	for _, lake in ipairs(WorldState.LakeCenters) do
+		-- Dock on the +X side of the lake.
+		local dockPos = lake.Position + Vector3.new(lake.Radius - 4, 1, 0)
+		local dock = Instance.new("Part")
+		dock.Anchored = true
+		dock.Size = Vector3.new(14, 1, 6)
+		dock.CFrame = CFrame.new(dockPos)
+		dock.Color = Color3.fromRGB(120, 80, 50)
+		dock.Material = Enum.Material.Wood
+		dock.Name = "Dock"
+		dock.Parent = StructuresFolder
+		table.insert(WorldState.BoatDocks, dockPos)
+
+		buildBoat(lake.Position + Vector3.new(lake.Radius - 16, 0, 2))
+	end
+
+	-- A couple of boats along the ocean ring (south shore + east shore).
+	buildBoat(Vector3.new(0, 0, HALF - 40))
+	buildBoat(Vector3.new(HALF - 40, 0, 0))
+end
+
 -- ── Scatter structures ───────────────────────────────────────────────────
 local function randomFlatPoint(minDist: number): Vector3
 	for _ = 1, 60 do
@@ -374,13 +592,17 @@ end
 -- ── Go ───────────────────────────────────────────────────────────────────
 buildOcean()
 buildTerrain()
+buildWaterways()
 buildMarket(MarketFolder)
 scatter()
+placeDocksAndBoats()
 ensureSpawnLocation()
 
-print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d"):format(
+print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d"):format(
 	#WorldState.SpawnAnchors,
 	#WorldState.CabinPositions,
 	#WorldState.CampPositions,
-	#WorldState.CavePortals
+	#WorldState.CavePortals,
+	#WorldState.LakeCenters,
+	#BoatsFolder:GetChildren()
 ))

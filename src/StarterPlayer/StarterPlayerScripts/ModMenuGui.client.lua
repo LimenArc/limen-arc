@@ -446,7 +446,49 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- ── Toggle key ───────────────────────────────────────────────────────────
+-- ── On-screen toggle button + keyboard shortcut ──────────────────────────
+local toggleGui = Instance.new("ScreenGui")
+toggleGui.Name = "ModMenuToggle"
+toggleGui.ResetOnSpawn = false
+toggleGui.Parent = playerGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.AnchorPoint = Vector2.new(1, 0)
+toggleBtn.Position = UDim2.new(1, -16, 0, 16)
+toggleBtn.Size = UDim2.fromOffset(60, 60)
+toggleBtn.Text = "MOD"
+toggleBtn.Font = Enum.Font.FredokaOne
+toggleBtn.TextSize = 18
+toggleBtn.TextColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(210, 180, 90)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.AutoButtonColor = true
+toggleBtn.Parent = toggleGui
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(1, 0)
+btnCorner.Parent = toggleBtn
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Color = Color3.fromRGB(60, 40, 10)
+btnStroke.Thickness = 2
+btnStroke.Parent = toggleBtn
+
+local keyHint = Instance.new("TextLabel")
+keyHint.AnchorPoint = Vector2.new(0.5, 0)
+keyHint.Position = UDim2.new(0.5, 0, 1, 2)
+keyHint.Size = UDim2.fromOffset(60, 16)
+keyHint.BackgroundTransparency = 1
+keyHint.Text = "[M]"
+keyHint.Font = Enum.Font.Gotham
+keyHint.TextSize = 11
+keyHint.TextColor3 = Color3.fromRGB(230, 210, 170)
+keyHint.Parent = toggleBtn
+
+toggleBtn.MouseButton1Click:Connect(function()
+	screen.Enabled = not screen.Enabled
+end)
+
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
 	if input.KeyCode == Enum.KeyCode.M then

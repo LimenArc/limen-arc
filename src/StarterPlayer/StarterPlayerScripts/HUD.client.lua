@@ -45,7 +45,7 @@ local coinsLine = line(1, Color3.fromRGB(240, 210, 120))
 local monLine   = line(2, Color3.fromRGB(200, 230, 240))
 local trapLine  = line(3, Color3.fromRGB(210, 200, 240))
 local hintLine  = line(4, Color3.fromRGB(160, 160, 180))
-hintLine.Text   = "[M] mod menu   [B] backpack   [F] trap   [E] market"
+hintLine.Text   = "[M] mod   [B] bag   [F] trap   [E] market   [T] trade"
 
 local function refresh()
 	local save = _G.SaveCache and _G.SaveCache.Save
