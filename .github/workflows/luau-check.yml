@@ -25,19 +25,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Remote events declared vs used
-        run: |
-          set -e
-          grep -oE '^\t"[A-Z][A-Za-z]+",' src/ReplicatedStorage/Remotes.lua \
-            | tr -d '\t",' | sort -u > /tmp/declared
-          grep -rhoE 'Remotes\.Events\.[A-Z][A-Za-z]+' src \
-            | sed 's/Remotes\.Events\.//' | sort -u > /tmp/used
-          undeclared=$(comm -23 /tmp/used /tmp/declared)
-          if [ -n "$undeclared" ]; then
-            echo "::error::These remote events are referenced but not declared in Remotes.lua:"
-            echo "$undeclared"
-            exit 1
-          fi
-          echo "OK — every Remotes.Events.* referenced is declared."
+        run: python3 scripts/check_remotes.py
 
       - name: Monster / item id references resolve
         run: python3 scripts/check_ids.py
