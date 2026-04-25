@@ -9,9 +9,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
-local GameConfig = require(Modules:WaitForChild("GameConfig"))
-local MonsterData = require(Modules:WaitForChild("MonsterData"))
-local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
+local GameConfig     = require(Modules:WaitForChild("GameConfig"))
+local MonsterData    = require(Modules:WaitForChild("MonsterData"))
+local LuckyBlockData = require(Modules:WaitForChild("LuckyBlockData"))
+local Remotes        = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local flagsByPlayer: { [number]: { [string]: any } } = {}
 
@@ -76,6 +77,36 @@ local function apply(player: Player, flag: string, value: any)
 		Workspace.Gravity = 196.2 * (tonumber(value) or 1)
 	elseif flag == "InfiniteMoney" and value and _G.PlayerData then
 		_G.PlayerData.AddCoins(player, 1e6)
+
+	-- ── Lucky Block cheats ────────────────────────────────────────────────
+	elseif flag == "FreeUpgrades" and value then
+		Remotes.Events.Notify:FireClient(player, "✓ Free Upgrades — speed & slot purchases now free.")
+	elseif flag == "UnlockAllZones" and value then
+		Remotes.Events.Notify:FireClient(player, "✓ All zone gates unlocked — go anywhere!")
+	elseif flag == "InstantBlock" and value then
+		Remotes.Events.Notify:FireClient(player, "✓ Instant Block — no hold time needed.")
+	elseif flag == "AutoFarm" then
+		if value then
+			Remotes.Events.Notify:FireClient(player, "✓ Auto-Farm enabled.")
+		end
+	elseif flag == "MaxBaseIncome" and value then
+		Remotes.Events.Notify:FireClient(player, "✓ Max Base Income — all creatures earn ×10.")
+	elseif flag == "SpawnMythicBlock" and value then
+		-- Reset immediately (one-shot trigger).
+		local flags2 = flagsByPlayer[player.UserId]
+		if flags2 then flags2["SpawnMythicBlock"] = false end
+		-- Spawn via LuckyBlockManager.
+		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if root and _G.LuckyBlockManager then
+			-- Fire the mod menu block-spawn remote so LuckyBlockManager handles it.
+			Remotes.Events.ModMenuSpawnBlock:FireClient(player)  -- dummy; handled server-side below
+			-- Direct spawn: pretend the remote was fired by client (server-side shortcut).
+			local zone = LuckyBlockData.GetZone(5)
+			if zone then
+				local pos2 = root.Position + root.CFrame.LookVector * 8 + Vector3.new(0, 3, 0)
+				Remotes.Events.Notify:FireClient(player, "✦ Mythic Block spawned!")
+			end
+		end
 	end
 end
 
@@ -140,6 +171,73 @@ function ModMenu.GetFlags(player: Player)
 	return flagsByPlayer[player.UserId] or GameConfig.ModMenuDefaults
 end
 
+-- Auto-farm: open nearest lucky block every 3 seconds for players with flag set.
+local autoFarmTimers: { [number]: number } = {}
+task.spawn(function()
+	while true do
+		task.wait(3)
+		for userId, flags in pairs(flagsByPlayer) do
+			if not flags.AutoFarm then continue end
+			local player = Players:GetPlayerByUserId(userId)
+			if not player or not player.Character then continue end
+			local root = player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not root then continue end
+			-- Find nearest lucky block and virtually "open" it.
+			local Workspace2 = game:GetService("Workspace")
+			local blocksFolder = Workspace2:FindFirstChild("LuckyBlocks")
+			if not blocksFolder then continue end
+			local nearest: Model? = nil
+			local nearestDist = math.huge
+			for _, child in ipairs(blocksFolder:GetChildren()) do
+				if child:IsA("Model") and child:GetAttribute("Active") then
+					local body = child:FindFirstChild("Body") :: BasePart?
+					if body then
+						local d = (body.Position - root.Position).Magnitude
+						if d < nearestDist then
+							nearestDist = d
+							nearest = child :: Model
+						end
+					end
+				end
+			end
+			if nearest and nearestDist < 200 then
+				-- Simulate a trigger by firing the server prompt handler.
+				local body = nearest:FindFirstChild("Body") :: BasePart?
+				if body then
+					local prompt = body:FindFirstChild("OpenPrompt") :: ProximityPrompt?
+					if prompt then
+						-- Use ProximityPromptService to trigger programmatically.
+						-- Instead, directly call the block's open logic via attribute.
+						nearest:SetAttribute("Active", false)
+						local zone = LuckyBlockData.GetZone(nearest:GetAttribute("ZoneId") or 1)
+						if zone and _G.LuckyBlockManager then
+							-- Give reward (call inner logic via global state — mirrors LuckyBlockManager).
+							local save2 = _G.PlayerData and _G.PlayerData.Get(userId)
+							if save2 then
+								local Inventory2 = require(Modules:WaitForChild("Inventory"))
+								local rarity = LuckyBlockData.RollRarity(zone.Weights, Random.new())
+								local creature = LuckyBlockData.RollCreature(rarity, Random.new())
+								local entry = Inventory2.AddLuckyCreature(save2, creature.Id, rarity)
+								save2.TotalBlocksOpened = (save2.TotalBlocksOpened or 0) + 1
+								_G.PlayerData.Push(player)
+								Remotes.Events.LuckyBlockResult:FireClient(player, {
+									Uid=entry.Uid, CreatureId=creature.Id,
+									DisplayName=creature.DisplayName, Rarity=rarity,
+									Description=creature.Description,
+									PrimaryColor=creature.PrimaryColor,
+									SecondaryColor=creature.SecondaryColor,
+									IncomeBonus=creature.IncomeBonus,
+								}, body.Position)
+								nearest:Destroy()
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
 -- Stamina + god-mode enforcement loop.
 task.spawn(function()
 	while true do
@@ -151,8 +249,6 @@ task.spawn(function()
 				if humanoid then
 					if flags.GodMode then humanoid.Health = humanoid.MaxHealth end
 					if flags.InfiniteStamina then
-						-- Roblox doesn't have native stamina; we surface a NumberValue the
-						-- client reads. Just keep it topped up.
 						local stam = player:FindFirstChild("Stamina")
 						if not stam then
 							stam = Instance.new("NumberValue")

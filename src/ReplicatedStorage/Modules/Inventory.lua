@@ -15,6 +15,20 @@ export type CaughtMonster = {
 	MaxHP: number,
 }
 
+-- A creature obtained from a lucky block, stored in the lucky creature inventory.
+export type LuckyCreatureEntry = {
+	Uid: string,       -- unique per-instance id
+	CreatureId: string,
+	Rarity: string,
+	CollectedAt: number,
+}
+
+-- One creature placed in the base at a given grid slot (1-indexed).
+export type BasePlacement = {
+	SlotIndex: number,
+	Uid: string,       -- references a LuckyCreatureEntry.Uid
+}
+
 export type PlayerSave = {
 	Coins: number,
 	Items: { ItemStack },
@@ -22,6 +36,13 @@ export type PlayerSave = {
 	ActiveMonsterUuid: string?,
 	EquippedWeaponId: string?,
 	DiscoveredMonsters: { [string]: boolean },
+	-- Lucky Block additions
+	SpeedLevel: number,
+	BaseSlotCount: number,
+	LuckyCreatures: { LuckyCreatureEntry },
+	BasePlacements: { BasePlacement },
+	FurthestZone: number,
+	TotalBlocksOpened: number,
 }
 
 local Inventory = {}
@@ -34,7 +55,90 @@ function Inventory.NewSave(startingCoins: number): PlayerSave
 		ActiveMonsterUuid = nil,
 		EquippedWeaponId = nil,
 		DiscoveredMonsters = {},
+		SpeedLevel = 0,
+		BaseSlotCount = 4,
+		LuckyCreatures = {},
+		BasePlacements = {},
+		FurthestZone = 1,
+		TotalBlocksOpened = 0,
 	}
+end
+
+-- Ensure legacy saves loaded from DataStore have the new fields.
+function Inventory.Migrate(save: PlayerSave)
+	if save.SpeedLevel == nil then save.SpeedLevel = 0 end
+	if save.BaseSlotCount == nil then save.BaseSlotCount = 4 end
+	if save.LuckyCreatures == nil then save.LuckyCreatures = {} end
+	if save.BasePlacements == nil then save.BasePlacements = {} end
+	if save.FurthestZone == nil then save.FurthestZone = 1 end
+	if save.TotalBlocksOpened == nil then save.TotalBlocksOpened = 0 end
+end
+
+-- Add a lucky creature to the inventory; returns its new entry.
+function Inventory.AddLuckyCreature(save: PlayerSave, creatureId: string, rarity: string): LuckyCreatureEntry
+	local entry: LuckyCreatureEntry = {
+		Uid = ("%s_%d_%d"):format(creatureId, os.time(), math.random(1000, 9999)),
+		CreatureId = creatureId,
+		Rarity = rarity,
+		CollectedAt = os.time(),
+	}
+	table.insert(save.LuckyCreatures, entry)
+	return entry
+end
+
+-- Find a lucky creature entry by uid.
+function Inventory.FindLuckyCreature(save: PlayerSave, uid: string): LuckyCreatureEntry?
+	for _, e in ipairs(save.LuckyCreatures) do
+		if e.Uid == uid then return e end
+	end
+	return nil
+end
+
+-- Remove a lucky creature by uid (e.g. on sell).
+function Inventory.RemoveLuckyCreature(save: PlayerSave, uid: string): boolean
+	for i, e in ipairs(save.LuckyCreatures) do
+		if e.Uid == uid then
+			table.remove(save.LuckyCreatures, i)
+			-- Also remove from base if placed.
+			for j = #save.BasePlacements, 1, -1 do
+				if save.BasePlacements[j].Uid == uid then
+					table.remove(save.BasePlacements, j)
+				end
+			end
+			return true
+		end
+	end
+	return false
+end
+
+-- Place a creature in a base slot (replaces any existing occupant).
+function Inventory.PlaceInBase(save: PlayerSave, uid: string, slotIndex: number): boolean
+	if not Inventory.FindLuckyCreature(save, uid) then return false end
+	-- Remove any existing creature in that slot.
+	for i = #save.BasePlacements, 1, -1 do
+		if save.BasePlacements[i].SlotIndex == slotIndex then
+			table.remove(save.BasePlacements, i)
+		end
+	end
+	-- Remove uid from any other slot.
+	for i = #save.BasePlacements, 1, -1 do
+		if save.BasePlacements[i].Uid == uid then
+			table.remove(save.BasePlacements, i)
+		end
+	end
+	table.insert(save.BasePlacements, { SlotIndex = slotIndex, Uid = uid })
+	return true
+end
+
+-- Remove a creature from a base slot.
+function Inventory.RemoveFromBase(save: PlayerSave, slotIndex: number): boolean
+	for i, p in ipairs(save.BasePlacements) do
+		if p.SlotIndex == slotIndex then
+			table.remove(save.BasePlacements, i)
+			return true
+		end
+	end
+	return false
 end
 
 function Inventory.AddItem(save: PlayerSave, itemId: string, count: number): boolean

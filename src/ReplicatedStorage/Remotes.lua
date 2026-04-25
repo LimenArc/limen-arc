@@ -37,12 +37,32 @@ local Events = {
 	"TradeUpdate",          -- server → client: full session snapshot
 	"TradeIncoming",        -- server → client: someone wants to trade
 	"TradeEnded",           -- server → client: session closed (success/cancel)
+
+	-- Lucky Block
+	"LuckyBlockResult",     -- server → client: (creatureDef, rarity, position)
+	"BlockOpened",          -- server → client: block at position was just opened (for animation)
+	"ModMenuSpawnBlock",    -- client → server (mod menu): force-spawn block at player
+
+	-- Base
+	"PlaceBaseCreature",    -- client → server: (inventoryIndex, slotIndex)
+	"RemoveBaseCreature",   -- client → server: (slotIndex)
+	"SellBaseCreature",     -- client → server: (slotIndex)
+	"BaseUpdate",           -- server → client: full base snapshot
+
+	-- Upgrades
+	"BuySpeedUpgrade",      -- client → server
+	"BuyBaseSlots",         -- client → server
+
+	-- Zones
+	"ZoneChanged",          -- server → client: (newZoneId)
 }
 
 local Functions = {
 	"GetPlayerSave",
 	"GetMarketCatalog",
 	"GetModMenuState",
+	"GetZoneInfo",          -- client → server: returns { ZoneId, Zones table }
+	"GetBaseState",         -- client → server: returns base creatures snapshot
 }
 
 local function ensure(className: string, name: string): Instance

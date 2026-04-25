@@ -61,6 +61,26 @@ GameConfig.ModMenuDefaults = {
 	Weather             = "Clear", -- Clear | Rain | Storm | Snow
 	ClockTime           = 14,      -- 0..24
 	TimeScale           = 1,       -- 0.1..10
+	-- Lucky Block cheats
+	FreeUpgrades        = false, -- speed & slot purchases cost 0
+	UnlockAllZones      = false, -- disables zone speed gate
+	InstantBlock        = false, -- block opens immediately (no hold)
+	AutoFarm            = false, -- server auto-opens nearest block every 3s
+	MaxBaseIncome       = false, -- base income × 10
+	SpawnMythicBlock    = false, -- trigger: spawn a mythic block at player
 }
+
+-- ── Lucky Block settings ──────────────────────────────────────────────────
+GameConfig.BaseIncomeTickRate  = 5      -- seconds between income ticks
+GameConfig.BlockInteractDist   = 14     -- studs; ProximityPrompt MaxDistance
+GameConfig.MaxBaseSlots        = 24     -- hard cap on base creature slots
+GameConfig.BlockBobAmplitude   = 0.4   -- block hover bob height (studs)
+GameConfig.BlockBobSpeed       = 1.2   -- block bob cycles per second
+GameConfig.ZonePushbackStuds   = 30    -- how far back player is pushed on gate deny
+
+-- Base plot layout.
+GameConfig.BasePlotSize        = 72     -- each player's plot is 72×72 studs
+GameConfig.BasePlotsPerRow     = 6      -- 6 plots in a row before wrapping
+GameConfig.BasePlotOrigin      = Vector3.new(160, 0, -80) -- world position of first plot
 
 return GameConfig

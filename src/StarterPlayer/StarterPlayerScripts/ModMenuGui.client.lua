@@ -225,23 +225,78 @@ local function addChoiceRow(flag: string, label: string, choices: { string })
 	redraw()
 end
 
--- Build all rows in the order shown in the README.
+-- ── Section header helper ────────────────────────────────────────────────
+
+local function sectionHeader(text: string)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0, 26)
+	f.BackgroundColor3 = Color3.fromRGB(20, 22, 35)
+	f.BorderSizePixel = 0
+	f.Parent = scroll
+	Instance.new("UICorner", f).CornerRadius = UDim.new(0, 5)
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.Position = UDim2.fromOffset(12, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.FredokaOne
+	lbl.TextSize = 15
+	lbl.TextColor3 = Color3.fromRGB(240, 200, 80)
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Text = text
+	lbl.Parent = f
+end
+
+-- ── Build all rows ────────────────────────────────────────────────────────
+
+sectionHeader("▸ Player Cheats")
 addToggleRow("GodMode",         "God mode")
 addToggleRow("InfiniteStamina", "Infinite stamina")
 addSliderRow("SpeedMultiplier", "Speed multiplier",  1, 8, 1)
 addSliderRow("JumpMultiplier",  "Jump multiplier",   1, 4, 1)
 addToggleRow("NoClip",          "No-clip")
 addToggleRow("InfiniteMoney",   "Infinite money (top-up)")
+
+sectionHeader("▸ Combat")
 addToggleRow("InstantCapture",  "Instant capture")
 addToggleRow("AutoCatch",       "Auto-catch nearby monster")
 addSliderRow("DamageMultiplier","Damage multiplier", 1, 20, 1)
+addToggleRow("InstantLevelUp",  "Instant level up catches")
+
+sectionHeader("▸ Visuals / World")
 addToggleRow("EspMonsters",     "ESP — monsters")
 addToggleRow("EspLoot",         "ESP — loot crates")
 addToggleRow("XrayCaves",       "X-ray caves")
-addToggleRow("InstantLevelUp",  "Instant level up catches")
 addChoiceRow("Weather",         "Weather",     { "Clear", "Rain", "Storm", "Snow" })
 addSliderRow("ClockTime",       "Time of day", 0, 24, 1)
 addSliderRow("TimeScale",       "Gravity scale (world speed)", 1, 10, 1)
+
+sectionHeader("▸ Lucky Block Cheats  (Everything FREE)")
+addToggleRow("FreeUpgrades",    "Free upgrades (speed & base slots)")
+addToggleRow("UnlockAllZones",  "Unlock all zones (ignore speed gate)")
+addToggleRow("InstantBlock",    "Instant block open (no hold)")
+addToggleRow("AutoFarm",        "Auto-farm nearest block every 3 s")
+addToggleRow("MaxBaseIncome",   "Max base income (×10 multiplier)")
+addToggleRow("InfiniteMoney",   "Infinite money — 1M coin top-up")
+
+-- One-shot button to spawn a Mythic block at your feet.
+do
+	local f = row()
+	addLabel(f, "Spawn Mythic Block at player", UDim2.new(1, -120, 1, 0))
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromOffset(100, 26)
+	btn.Position = UDim2.new(1, -112, 0.5, -13)
+	btn.BackgroundColor3 = Color3.fromRGB(140, 40, 200)
+	btn.TextColor3 = Color3.fromRGB(255, 220, 255)
+	btn.Text = "✦ SPAWN"
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 12
+	btn.BorderSizePixel = 0
+	btn.Parent = f
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+	btn.MouseButton1Click:Connect(function()
+		Remotes.Events.ModMenuSpawnBlock:FireServer()
+	end)
+end
 
 -- Spawn-monster dropdown + teleport buttons at the bottom.
 local spawnRow = row()

@@ -30,7 +30,9 @@ local function loadSave(userId: number): Inventory.PlayerSave
 			return store:GetAsync(keyFor(userId))
 		end)
 		if ok and type(data) == "table" then
-			return data :: any
+			local save = data :: any
+			Inventory.Migrate(save)   -- fill in missing lucky block fields
+			return save
 		end
 	end
 	local fresh = Inventory.NewSave(GameConfig.StartingCoins)

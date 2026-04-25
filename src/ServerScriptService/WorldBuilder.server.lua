@@ -589,20 +589,166 @@ local function ensureSpawnLocation()
 	end
 end
 
+-- ── Lucky Block: zone ring markers ───────────────────────────────────────
+-- Visual boundary rings at each zone's outer radius so players know when
+-- they're approaching a new zone. Uses many thin arc segments.
+
+local LuckyBlockData = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("LuckyBlockData"))
+
+local ZoneRingsFolder = folder("ZoneRings", WorldRoot)
+
+local function buildZoneRing(zone: any)
+	local radius = zone.MaxRadius
+	local segments = 80
+	for i = 0, segments - 1 do
+		local a1 = (i / segments) * math.pi * 2
+		local a2 = ((i + 1) / segments) * math.pi * 2
+		local mid = (a1 + a2) / 2
+		local px = math.cos(mid) * radius
+		local pz = math.sin(mid) * radius
+		local h = math.noise(px * 0.01, pz * 0.01) * 6 + 5
+
+		local arc = Instance.new("Part")
+		arc.Anchored = true
+		arc.CanCollide = false
+		arc.Size = Vector3.new(radius * math.pi * 2 / segments * 1.05, 12, 0.5)
+		arc.CFrame = CFrame.new(Vector3.new(px, h, pz))
+			* CFrame.Angles(0, -mid - math.pi / 2, 0)
+		arc.Color = zone.BlockColor
+		arc.Material = Enum.Material.Neon
+		arc.Transparency = 0.72
+		arc.CastShadow = false
+		arc.Name = ("ZoneRing_%d"):format(zone.Id)
+		arc.Parent = ZoneRingsFolder
+
+		-- Zone label on first segment.
+		if i == 0 then
+			local bb = Instance.new("BillboardGui")
+			bb.Adornee = arc
+			bb.Size = UDim2.fromOffset(220, 36)
+			bb.StudsOffset = Vector3.new(0, 8, 0)
+			bb.AlwaysOnTop = false
+			local txt = Instance.new("TextLabel")
+			txt.Size = UDim2.fromScale(1, 1)
+			txt.BackgroundTransparency = 1
+			txt.Text = ("Zone %d: %s"):format(zone.Id, zone.Name)
+			txt.Font = Enum.Font.GothamBold
+			txt.TextSize = 15
+			txt.TextColor3 = zone.BlockGlow
+			txt.TextStrokeTransparency = 0
+			txt.Parent = bb
+			bb.Parent = arc
+		end
+	end
+end
+
+for _, zone in ipairs(LuckyBlockData.Zones) do
+	if zone.Id < #LuckyBlockData.Zones then  -- don't draw ring at the void boundary
+		buildZoneRing(zone)
+	end
+end
+
+-- ── Speed Upgrade Station (beside the market) ─────────────────────────────
+
+local function buildUpgradeStation(parent: Instance)
+	local pos = Vector3.new(50, 4, 10)
+
+	local base = Instance.new("Part")
+	base.Anchored = true
+	base.Size = Vector3.new(10, 1, 10)
+	base.CFrame = CFrame.new(pos)
+	base.Color = Color3.fromRGB(40, 40, 60)
+	base.Material = Enum.Material.SmoothPlastic
+	base.TopSurface = Enum.SurfaceType.Smooth
+	base.Parent = parent
+
+	-- Central pillar.
+	local pillar = Instance.new("Part")
+	pillar.Anchored = true
+	pillar.Size = Vector3.new(2.5, 8, 2.5)
+	pillar.CFrame = CFrame.new(pos + Vector3.new(0, 4.5, 0))
+	pillar.Color = Color3.fromRGB(60, 60, 90)
+	pillar.Material = Enum.Material.Metal
+	pillar.Parent = parent
+
+	-- Glowing top orb.
+	local orb = Instance.new("Part")
+	orb.Anchored = true
+	orb.Shape = Enum.PartType.Ball
+	orb.Size = Vector3.new(3, 3, 3)
+	orb.CFrame = CFrame.new(pos + Vector3.new(0, 9.5, 0))
+	orb.Color = Color3.fromRGB(80, 160, 255)
+	orb.Material = Enum.Material.Neon
+	orb.Transparency = 0.1
+	orb.CastShadow = false
+	orb.Parent = parent
+
+	local orbLight = Instance.new("PointLight")
+	orbLight.Brightness = 4
+	orbLight.Range = 30
+	orbLight.Color = Color3.fromRGB(80, 160, 255)
+	orbLight.Parent = orb
+
+	-- Arrow ring around the pillar.
+	for i = 0, 5 do
+		local a = (i / 6) * math.pi * 2
+		local arrow = Instance.new("Part")
+		arrow.Anchored = true
+		arrow.Size = Vector3.new(0.4, 1.2, 0.4)
+		arrow.CFrame = CFrame.new(pos + Vector3.new(math.cos(a) * 1.8, 5 + i * 0.4, math.sin(a) * 1.8))
+		arrow.Color = Color3.fromRGB(120, 200, 255)
+		arrow.Material = Enum.Material.Neon
+		arrow.Transparency = 0.3
+		arrow.CastShadow = false
+		arrow.Parent = parent
+	end
+
+	-- Billboard label.
+	local bb = Instance.new("BillboardGui")
+	bb.Adornee = orb
+	bb.Size = UDim2.fromOffset(200, 50)
+	bb.StudsOffset = Vector3.new(0, 3.5, 0)
+	bb.AlwaysOnTop = false
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = "⚡ Speed Upgrades\n[U] to open"
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 14
+	lbl.TextColor3 = Color3.fromRGB(140, 210, 255)
+	lbl.TextStrokeTransparency = 0
+	lbl.Parent = bb
+	bb.Parent = orb
+
+	-- ProximityPrompt on the pillar so the client can detect "near upgrade station".
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "UpgradeStationPrompt"
+	prompt.ActionText = "Upgrade"
+	prompt.ObjectText = "Speed Station"
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.U
+	prompt.Parent = pillar
+
+	WorldState.UpgradeStationPos = pos
+end
+
 -- ── Go ───────────────────────────────────────────────────────────────────
 buildOcean()
 buildTerrain()
 buildWaterways()
 buildMarket(MarketFolder)
+buildUpgradeStation(MarketFolder)
 scatter()
 placeDocksAndBoats()
 ensureSpawnLocation()
 
-print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d"):format(
+print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d zones=%d"):format(
 	#WorldState.SpawnAnchors,
 	#WorldState.CabinPositions,
 	#WorldState.CampPositions,
 	#WorldState.CavePortals,
 	#WorldState.LakeCenters,
-	#BoatsFolder:GetChildren()
+	#BoatsFolder:GetChildren(),
+	#LuckyBlockData.Zones
 ))
