@@ -1,0 +1,21 @@
+name: Diagnostic
+
+# Minimal workflow — if this fails in seconds with no output, GitHub Actions
+# is disabled at the repo or org level. Settings → Actions → General.
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  hello:
+    name: Diagnostic hello
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print runner info
+        run: |
+          echo "If you see this line in the log, Actions is running fine."
+          echo "Runner: $RUNNER_OS / $RUNNER_ARCH"
+          uname -a
+          date -u
