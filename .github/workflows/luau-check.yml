@@ -22,10 +22,22 @@ jobs:
 
       - name: Install Luau
         run: |
-          curl -fsSL -o /tmp/luau.zip \
-            https://github.com/luau-lang/luau/releases/latest/download/luau-ubuntu.zip
-          unzip -q /tmp/luau.zip -d /tmp/luau
+          set -x
+          # Pin to a tested release so a transient `/latest/` redirect or
+          # asset rename can't break us.
+          LUAU_VERSION=0.717
+          URL="https://github.com/luau-lang/luau/releases/download/${LUAU_VERSION}/luau-ubuntu.zip"
+          mkdir -p /tmp/luau
+          # `-S` shows errors even with `-s`; `-w` prints the HTTP code.
+          http_code=$(curl -fsSL -o /tmp/luau.zip --write-out '%{http_code}' "$URL") \
+            || { echo "::error::curl failed to download $URL (http=$http_code)"; exit 1; }
+          ls -la /tmp/luau.zip
+          file /tmp/luau.zip || true
+          unzip -o /tmp/luau.zip -d /tmp/luau \
+            || { echo "::error::unzip failed; file is probably not a zip"; head -c 256 /tmp/luau.zip | od -c | head; exit 1; }
+          ls -la /tmp/luau
           chmod +x /tmp/luau/luau /tmp/luau/luau-compile /tmp/luau/luau-analyze
+          /tmp/luau/luau-compile --help | head -5
           echo "/tmp/luau" >> "$GITHUB_PATH"
 
       - name: Parse every source file
