@@ -47,7 +47,9 @@ jobs:
           done < <(find src -type f -name "*.lua" -print0)
           echo ""
           echo "Parsed $total file(s); $fail failed."
-          if [ "$fail" -gt 0 ]; then exit 1; fi
+          # Explicit numeric exit — using `if … then exit 1; fi` falls through
+          # with the test's nonzero exit when fail==0 and breaks the step.
+          exit "$fail"
 
       - name: Type analyzer (informational)
         if: always() && steps.parse.conclusion == 'success'
@@ -71,10 +73,12 @@ jobs:
           done < <(find src -type f -name "*.lua" -print0)
           echo ""
           echo "Analyzed $total file(s); $issues had non-trivial findings."
-          # Non-fatal.
+          # Non-fatal — informational only.
+          exit 0
 
       - name: Cross-file consistency
         run: |
+          set +e
           echo "=== Remote events: declared vs used ==="
           grep -oE '^\t"[A-Z][A-Za-z]+",' src/ReplicatedStorage/Remotes.lua \
             | tr -d '\t",' | sort -u > /tmp/declared
