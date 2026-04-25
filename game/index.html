@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monster World: The Infection</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+<div id="game">
+
+  <!-- HUD (shown after game starts) -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <span id="hud-name">Hero</span>
+      <span id="hud-level" class="badge">Lv.1</span>
+    </div>
+    <div class="hud-bars">
+      <div class="bar-row"><span class="bar-label">HP</span>
+        <div class="bar-track"><div id="hud-hp" class="bar-fill hp"></div></div>
+        <span id="hud-hp-txt" class="bar-txt">120/120</span></div>
+      <div class="bar-row"><span class="bar-label">MP</span>
+        <div class="bar-track"><div id="hud-mp" class="bar-fill mp"></div></div>
+        <span id="hud-mp-txt" class="bar-txt">60/60</span></div>
+      <div class="bar-row"><span class="bar-label">XP</span>
+        <div class="bar-track"><div id="hud-xp" class="bar-fill xp"></div></div>
+        <span id="hud-xp-txt" class="bar-txt">0/100</span></div>
+    </div>
+    <div class="hud-right">
+      <span id="hud-gold">💰 200</span>
+      <nav class="hud-nav">
+        <button onclick="showScreen('map')" title="World Map">🗺️ Map</button>
+        <button onclick="showScreen('backpack')" title="Backpack">🎒 Pack</button>
+        <button onclick="showScreen('party')" title="Monster Party">🐲 Party</button>
+        <button onclick="showScreen('market')" title="Market">🏪 Market</button>
+        <button onclick="showScreen('quests')" title="Quests">📜 Quests</button>
+        <button onclick="showScreen('character')" title="Character">⚔️ Stats</button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ===== TITLE ===== -->
+  <div id="screen-title" class="screen active">
+    <div class="title-bg"><div id="particles"></div></div>
+    <div class="title-content">
+      <div class="title-eyebrow">☠ A World Consumed ☠</div>
+      <h1 class="title-logo">MONSTER<br>WORLD</h1>
+      <div class="title-sub">— THE INFECTION —</div>
+      <p class="title-lore">
+        The infection spread overnight. Forests, cities, oceans — all consumed.<br>
+        Twelve horrific monster forces now rule the ruins.<br>
+        You are the last survivor. Hunt them. Catch them. End it.
+      </p>
+      <div class="title-btns">
+        <button class="btn btn-primary glow" onclick="showScreen('name')">⚔️ New Journey</button>
+        <button class="btn btn-outline" onclick="tryLoadGame()">📂 Continue</button>
+      </div>
+      <div id="save-info" class="save-info"></div>
+    </div>
+  </div>
+
+  <!-- ===== NAME ENTRY ===== -->
+  <div id="screen-name" class="screen">
+    <div class="center-card">
+      <h2>Who are you, Survivor?</h2>
+      <p>The world needs a name to remember you by.</p>
+      <div class="name-row">
+        <input type="text" id="name-input" placeholder="Enter your name..." maxlength="20"
+          onkeydown="if(event.key==='Enter')confirmName()">
+        <button class="btn btn-primary" onclick="confirmName()">Begin ›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== WORLD MAP ===== -->
+  <div id="screen-map" class="screen">
+    <div class="screen-header">
+      <h2>🗺️ World Map</h2>
+      <div class="map-legend">
+        <span class="leg avail">◉ Unlocked</span>
+        <span class="leg done">✔ Cleared</span>
+        <span class="leg lock">🔒 Locked</span>
+      </div>
+      <div id="zone-progress-bar"></div>
+    </div>
+    <div id="map-container">
+      <div id="map-grid"></div>
+    </div>
+  </div>
+
+  <!-- ===== ZONE DETAIL ===== -->
+  <div id="screen-zone" class="screen">
+    <button class="btn btn-back" onclick="showScreen('map')">‹ World Map</button>
+    <div id="zone-detail"></div>
+  </div>
+
+  <!-- ===== EXPLORE ===== -->
+  <div id="screen-explore" class="screen">
+    <button class="btn btn-back" onclick="goBackToZone()">‹ Back to Zone</button>
+    <div id="explore-content"></div>
+  </div>
+
+  <!-- ===== COMBAT ===== -->
+  <div id="screen-combat" class="screen">
+    <div id="combat-arena">
+      <div id="combat-header">
+        <span id="combat-zone-name"></span>
+        <span id="combat-turn-label" class="turn-label">Your Turn</span>
+      </div>
+
+      <!-- Enemy -->
+      <div id="combat-enemy-zone" class="combat-entity-zone">
+        <div id="enemy-card" class="entity-card">
+          <div id="enemy-icon" class="entity-icon-big"></div>
+          <div class="entity-details">
+            <div id="enemy-name" class="entity-name-big"></div>
+            <div id="enemy-type-label" class="entity-type-label"></div>
+            <div class="bar-row big">
+              <span class="bar-label">HP</span>
+              <div class="bar-track wide"><div id="enemy-hp-fill" class="bar-fill hp"></div></div>
+              <span id="enemy-hp-txt" class="bar-txt"></span>
+            </div>
+            <div id="enemy-status-row" class="status-row"></div>
+          </div>
+        </div>
+        <div id="enemy-dmg" class="float-dmg hidden"></div>
+      </div>
+
+      <!-- Combat Log -->
+      <div id="combat-log-container">
+        <div id="combat-log"></div>
+      </div>
+
+      <!-- Player -->
+      <div id="combat-player-zone" class="combat-entity-zone">
+        <div id="player-card" class="entity-card">
+          <div class="entity-icon-big player-icon">🧑</div>
+          <div class="entity-details">
+            <div id="combat-pname" class="entity-name-big"></div>
+            <div class="entity-type-label">Level <span id="combat-plevel"></span></div>
+            <div class="bar-row big">
+              <span class="bar-label">HP</span>
+              <div class="bar-track wide"><div id="player-hp-fill" class="bar-fill hp"></div></div>
+              <span id="player-hp-txt" class="bar-txt"></span>
+            </div>
+            <div class="bar-row big">
+              <span class="bar-label">MP</span>
+              <div class="bar-track wide"><div id="player-mp-fill" class="bar-fill mp"></div></div>
+              <span id="player-mp-txt" class="bar-txt"></span>
+            </div>
+            <div id="player-status-row" class="status-row"></div>
+          </div>
+        </div>
+        <div id="player-dmg" class="float-dmg hidden heal-dmg"></div>
+      </div>
+
+      <!-- Actions -->
+      <div id="combat-actions">
+        <div id="action-main"></div>
+        <div id="action-sub" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== BACKPACK ===== -->
+  <div id="screen-backpack" class="screen">
+    <button class="btn btn-back" onclick="goBack()">‹ Back</button>
+    <div id="backpack-content"></div>
+  </div>
+
+  <!-- ===== MONSTER PARTY ===== -->
+  <div id="screen-party" class="screen">
+    <button class="btn btn-back" onclick="goBack()">‹ Back</button>
+    <div id="party-content"></div>
+  </div>
+
+  <!-- ===== MARKET ===== -->
+  <div id="screen-market" class="screen">
+    <button class="btn btn-back" onclick="goBack()">‹ Back</button>
+    <div id="market-content"></div>
+  </div>
+
+  <!-- ===== QUESTS ===== -->
+  <div id="screen-quests" class="screen">
+    <button class="btn btn-back" onclick="goBack()">‹ Back</button>
+    <div id="quests-content"></div>
+  </div>
+
+  <!-- ===== CHARACTER ===== -->
+  <div id="screen-character" class="screen">
+    <button class="btn btn-back" onclick="goBack()">‹ Back</button>
+    <div id="character-content"></div>
+  </div>
+
+  <!-- ===== GAME OVER ===== -->
+  <div id="screen-gameover" class="screen">
+    <div class="center-card dramatic">
+      <div class="big-icon">💀</div>
+      <h1>YOU FELL</h1>
+      <p id="go-msg">The monsters claimed another soul...</p>
+      <button class="btn btn-primary" onclick="respawn()">⚡ Rise Again</button>
+    </div>
+  </div>
+
+  <!-- ===== VICTORY ===== -->
+  <div id="screen-victory" class="screen">
+    <div class="center-card dramatic victory-card">
+      <div class="big-icon">🏆</div>
+      <h1>WORLD CLEANSED</h1>
+      <h2>The Infection Is Over</h2>
+      <p id="victory-msg"></p>
+      <button class="btn btn-primary" onclick="showScreen('map')">Continue Exploring</button>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="notif" class="notif hidden"></div>
+
+  <!-- ===== LEVEL UP OVERLAY ===== -->
+  <div id="levelup-overlay" class="overlay hidden">
+    <div class="overlay-box levelup-box">
+      <div class="big-icon spin">⭐</div>
+      <h2>LEVEL UP!</h2>
+      <div id="levelup-details"></div>
+      <button class="btn btn-primary" onclick="closeLevelup()">Onward!</button>
+    </div>
+  </div>
+
+  <!-- ===== CATCH SUCCESS OVERLAY ===== -->
+  <div id="catch-overlay" class="overlay hidden">
+    <div class="overlay-box catch-box">
+      <div id="catch-icon" class="big-icon bounce"></div>
+      <h2>MONSTER CAUGHT!</h2>
+      <div id="catch-details"></div>
+      <button class="btn btn-primary" onclick="closeCatchOverlay()">Excellent!</button>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
