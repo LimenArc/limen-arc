@@ -10,6 +10,7 @@ local CollectionService = game:GetService("CollectionService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local GameConfig = require(Modules:WaitForChild("GameConfig"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local CharacterBuilder = require(Modules:WaitForChild("CharacterBuilder"))
 
 -- Wait for WorldBuilder to finish.
 while not _G.WorldState do task.wait(0.1) end
@@ -49,31 +50,13 @@ end
 
 -- ── Model factory ────────────────────────────────────────────────────────
 local function buildMonsterModel(def: MonsterData.MonsterDef, pos: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = def.DisplayName
-
-	local body = Instance.new("Part")
-	body.Name = "Body"
-	body.Size = def.Size
-	body.Color = def.PrimaryColor
-	body.Material = Enum.Material.SmoothPlastic
-	body.Position = pos + Vector3.new(0, def.Size.Y / 2, 0)
-	body.Anchored = false
-	body.CanCollide = true
-	body.Parent = model
-
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Size = Vector3.new(def.Size.X * 0.7, def.Size.Y * 0.7, def.Size.X * 0.7)
-	head.Color = def.SecondaryColor
-	head.Material = Enum.Material.SmoothPlastic
-	head.Position = body.Position + Vector3.new(0, def.Size.Y * 0.7, -def.Size.Z * 0.4)
-	head.Parent = model
-
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = body
-	weld.Part1 = head
-	weld.Parent = body
+	local model = CharacterBuilder.BuildMonster({
+		DisplayName = def.DisplayName,
+		Types = def.Types,
+		Size = def.Size,
+		PrimaryColor = def.PrimaryColor,
+		SecondaryColor = def.SecondaryColor,
+	}, pos)
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = def.BaseHP
@@ -81,8 +64,6 @@ local function buildMonsterModel(def: MonsterData.MonsterDef, pos: Vector3): Mod
 	humanoid.WalkSpeed = def.BaseSpeed
 	humanoid.DisplayName = def.DisplayName
 	humanoid.Parent = model
-
-	model.PrimaryPart = body
 
 	-- Data the rest of the server reads off of the instance.
 	local idTag = Instance.new("StringValue")

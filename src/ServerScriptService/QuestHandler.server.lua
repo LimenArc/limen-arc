@@ -16,6 +16,7 @@ local RunService = game:GetService("RunService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local Quest = require(Modules:WaitForChild("QuestData"))
 local Inventory = require(Modules:WaitForChild("Inventory"))
+local CharacterBuilder = require(Modules:WaitForChild("CharacterBuilder"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 while not _G.WorldState do task.wait(0.1) end
@@ -51,27 +52,16 @@ local function C(rgb: { number }): Color3
 end
 
 local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
-	local model = Instance.new("Model")
+	local model = CharacterBuilder.BuildNpc({
+		DisplayName = def.DisplayName,
+		HeadColor = C(def.HeadColor),
+		BodyColor = C(def.BodyColor),
+	}, pos)
 	model.Name = "NPC_" .. def.Id
 
-	local body = Instance.new("Part")
-	body.Name = "Body"
-	body.Size = Vector3.new(2.2, 3.4, 1.6)
-	body.Color = C(def.BodyColor)
-	body.Material = Enum.Material.Fabric
-	body.Position = pos + Vector3.new(0, 1.7, 0)
-	body.Anchored = true
-	body.Parent = model
-
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Shape = Enum.PartType.Ball
-	head.Size = Vector3.new(1.6, 1.6, 1.6)
-	head.Color = C(def.HeadColor)
-	head.Material = Enum.Material.SmoothPlastic
-	head.Position = body.Position + Vector3.new(0, 2.4, 0)
-	head.Anchored = true
-	head.Parent = model
+	-- Anchor only the torso so physics settles on a stable foot.
+	local torso = model.PrimaryPart
+	if torso then torso.Anchored = true end
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = 100
@@ -80,21 +70,24 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	humanoid.WalkSpeed = 0
 	humanoid.Parent = model
 
-	local label = Instance.new("BillboardGui")
-	label.Adornee = head
-	label.Size = UDim2.fromOffset(220, 40)
-	label.StudsOffset = Vector3.new(0, 2, 0)
-	label.AlwaysOnTop = true
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Text = def.DisplayName
-	t.Font = Enum.Font.FredokaOne
-	t.TextSize = 18
-	t.TextColor3 = Color3.fromRGB(255, 240, 200)
-	t.TextStrokeTransparency = 0
-	t.Parent = label
-	label.Parent = head
+	local head = model:FindFirstChild("Head") :: BasePart?
+	if head then
+		local label = Instance.new("BillboardGui")
+		label.Adornee = head
+		label.Size = UDim2.fromOffset(220, 40)
+		label.StudsOffset = Vector3.new(0, 2, 0)
+		label.AlwaysOnTop = true
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = def.DisplayName
+		t.Font = Enum.Font.FredokaOne
+		t.TextSize = 18
+		t.TextColor3 = Color3.fromRGB(255, 240, 200)
+		t.TextStrokeTransparency = 0
+		t.Parent = label
+		label.Parent = head
+	end
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = "Talk"
@@ -102,7 +95,7 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	prompt.HoldDuration = 0.2
 	prompt.MaxActivationDistance = 12
 	prompt.RequiresLineOfSight = false
-	prompt.Parent = body
+	if torso then prompt.Parent = torso end
 
 	local idTag = Instance.new("StringValue")
 	idTag.Name = "NpcId"
@@ -110,9 +103,59 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	idTag.Parent = model
 
 	model:AddTag("NPC")
-	model.PrimaryPart = body
 	model.Parent = NPCS_FOLDER
 	return model
+end
+
+-- Idle chatter: every NPC says one of a few lines every ~30 seconds with a
+-- chat-style billboard above their head. Adds life without external assets.
+local CHATTER: { [string]: { string } } = {
+	tavi = { "Coins keep what's left of Aethel turning.", "Need a trap? I sell good ones.",
+		"Look at this fragment a traveler sold me…", "Quiet day at the stalls." },
+	sagewind = { "Take a potion. Don't argue.", "I dreamt of green farms again last night.",
+		"Trapping isn't the same as healing." },
+	marla = { "The fire keeps going out.", "I knew the people these were once.",
+		"Stay close to the camp." },
+	bren = { "Look — the soil's still warm.", "If we cure them, do they remember the planting?",
+		"Three sprout cubs and I'll know more." },
+	elin = { "The thirty are the old population.", "The Compendium is half done.",
+		"Each fragment was hidden by someone who hoped." },
+	heart_envoy = { "The Heart sleeps.", "Bring four fragments — or one weapon.",
+		"Both endings are honest." },
+}
+
+local function spawnChatter(model: Model, npcId: string, head: BasePart)
+	local lines = CHATTER[npcId]
+	if not lines then return end
+	local bubble = Instance.new("BillboardGui")
+	bubble.Adornee = head
+	bubble.Size = UDim2.fromOffset(260, 60)
+	bubble.StudsOffset = Vector3.new(0, 4, 0)
+	bubble.AlwaysOnTop = true
+	bubble.Enabled = false
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+	t.BackgroundTransparency = 0.2
+	t.TextColor3 = Color3.fromRGB(240, 230, 200)
+	t.Font = Enum.Font.Gotham
+	t.TextSize = 13
+	t.TextWrapped = true
+	t.Text = ""
+	t.Parent = bubble
+	Instance.new("UICorner", t).CornerRadius = UDim.new(0, 8)
+	bubble.Parent = head
+
+	task.spawn(function()
+		task.wait(math.random(5, 25))
+		while model.Parent do
+			t.Text = lines[math.random(1, #lines)]
+			bubble.Enabled = true
+			task.wait(5)
+			bubble.Enabled = false
+			task.wait(math.random(20, 45))
+		end
+	end)
 end
 
 -- Spawn all NPCs.
@@ -120,7 +163,10 @@ local npcModels: { [string]: Model } = {}
 for _, def in ipairs(Quest.Npcs) do
 	local pos = anchorPosition(def.Anchor)
 	if pos then
-		npcModels[def.Id] = buildNpcModel(def, pos)
+		local model = buildNpcModel(def, pos)
+		npcModels[def.Id] = model
+		local head = model:FindFirstChild("Head") :: BasePart?
+		if head then spawnChatter(model, def.Id, head) end
 	end
 end
 

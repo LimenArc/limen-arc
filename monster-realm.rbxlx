@@ -22,6 +22,414 @@
       </Properties>
       <Item class="ModuleScript" referent="3">
         <Properties>
+          <string name="Name">CharacterBuilder</string>
+          <string name="Source"><![CDATA[--!strict
+-- Builds nicer-looking creatures and NPCs from primitive parts.
+-- Used by MonsterSpawner and QuestHandler so the world feels less like a
+-- pile of boxes. No external assets — everything is composed from
+-- Roblox's built-in shapes, materials, lights, and particle emitters.
+
+local TweenService = game:GetService("TweenService")
+local CollectionService = game:GetService("CollectionService")
+
+local Builder = {}
+
+-- ── helpers ─────────────────────────────────────────────────────────────
+local function part(name: string, size: Vector3, color: Color3, material: Enum.Material?): BasePart
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true        -- joints are added later, then anchored only on PrimaryPart
+	p.CanCollide = false
+	p.Size = size
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	return p
+end
+
+local function ball(name: string, diameter: number, color: Color3, material: Enum.Material?): BasePart
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Shape = Enum.PartType.Ball
+	p.Anchored = true
+	p.CanCollide = false
+	p.Size = Vector3.new(diameter, diameter, diameter)
+	p.Color = color
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	return p
+end
+
+local function weld(p0: BasePart, p1: BasePart)
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = p0
+	w.Part1 = p1
+	w.Parent = p0
+end
+
+local function darken(c: Color3, by: number): Color3
+	return Color3.new(
+		math.clamp(c.R * (1 - by), 0, 1),
+		math.clamp(c.G * (1 - by), 0, 1),
+		math.clamp(c.B * (1 - by), 0, 1)
+	)
+end
+
+-- Lazily-built textures for type-specific particles. Roblox ships free
+-- "rbxasset://textures/" assets we can use without ID hunting.
+local PARTICLE_TEXTURES = {
+	Fire = "rbxasset://textures/particles/fire_main.dds",
+	Smoke = "rbxasset://textures/particles/smoke_main.dds",
+	Sparkle = "rbxasset://textures/particles/sparkles_main.dds",
+	Splash = "rbxasset://textures/particles/explosion01_implosion_main.dds",
+}
+
+local function attachParticles(host: BasePart, types: { string })
+	for _, ty in ipairs(types) do
+		if ty == "Fire" then
+			local fire = Instance.new("Fire")
+			fire.Heat = 6
+			fire.Size = math.clamp(host.Size.Magnitude * 0.6, 3, 8)
+			fire.Color = Color3.fromRGB(255, 140, 30)
+			fire.SecondaryColor = Color3.fromRGB(120, 30, 10)
+			fire.Parent = host
+		elseif ty == "Water" then
+			local em = Instance.new("ParticleEmitter")
+			em.Texture = PARTICLE_TEXTURES.Splash
+			em.Color = ColorSequence.new(Color3.fromRGB(100, 200, 240))
+			em.Rate = 6
+			em.Lifetime = NumberRange.new(0.6, 1.0)
+			em.Speed = NumberRange.new(2, 4)
+			em.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.6),
+				NumberSequenceKeypoint.new(1, 0.0),
+			})
+			em.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			em.Parent = host
+		elseif ty == "Electric" then
+			local sp = Instance.new("Sparkles")
+			sp.SparkleColor = Color3.fromRGB(240, 230, 80)
+			sp.Parent = host
+		elseif ty == "Grass" then
+			local em = Instance.new("ParticleEmitter")
+			em.Texture = PARTICLE_TEXTURES.Sparkle
+			em.Color = ColorSequence.new(Color3.fromRGB(120, 200, 80))
+			em.Rate = 3
+			em.Lifetime = NumberRange.new(1, 2)
+			em.Speed = NumberRange.new(0.5, 1.5)
+			em.Size = NumberSequence.new(0.4)
+			em.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.3),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			em.Parent = host
+		elseif ty == "Psychic" then
+			local light = Instance.new("PointLight")
+			light.Color = Color3.fromRGB(180, 100, 220)
+			light.Range = 8
+			light.Brightness = 1.5
+			light.Parent = host
+		elseif ty == "Ghost" then
+			local em = Instance.new("ParticleEmitter")
+			em.Texture = PARTICLE_TEXTURES.Smoke
+			em.Color = ColorSequence.new(Color3.fromRGB(180, 180, 220))
+			em.Rate = 4
+			em.Lifetime = NumberRange.new(1.5, 2.5)
+			em.Speed = NumberRange.new(0.5, 1.5)
+			em.Size = NumberSequence.new(1.2)
+			em.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			em.Parent = host
+		elseif ty == "Ice" then
+			local sp = Instance.new("Sparkles")
+			sp.SparkleColor = Color3.fromRGB(180, 220, 255)
+			sp.Parent = host
+		elseif ty == "Dark" then
+			local light = Instance.new("PointLight")
+			light.Color = Color3.fromRGB(80, 30, 100)
+			light.Range = 6
+			light.Brightness = 0.6
+			light.Parent = host
+		elseif ty == "Dragon" then
+			local fire = Instance.new("Fire")
+			fire.Heat = 12
+			fire.Size = 6
+			fire.Color = Color3.fromRGB(160, 60, 220)
+			fire.SecondaryColor = Color3.fromRGB(40, 10, 60)
+			fire.Parent = host
+		end
+	end
+end
+
+-- Subtle breathing / bobbing tween on the body part.
+local function breathe(body: BasePart)
+	local origin = body.CFrame
+	task.spawn(function()
+		while body.Parent do
+			local up = TweenService:Create(body, TweenInfo.new(2.0,
+				Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ CFrame = origin * CFrame.new(0, 0.15, 0) })
+			up:Play(); up.Completed:Wait()
+			if not body.Parent then break end
+			local down = TweenService:Create(body, TweenInfo.new(2.0,
+				Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ CFrame = origin })
+			down:Play(); down.Completed:Wait()
+		end
+	end)
+end
+
+-- ── Monster construction ────────────────────────────────────────────────
+-- Returns a Model whose PrimaryPart is the body. Caller weld-anchors it,
+-- adds Humanoid, etc.
+
+export type MonsterArt = {
+	DisplayName: string,
+	Types: { string },
+	Size: Vector3,
+	PrimaryColor: Color3,
+	SecondaryColor: Color3,
+}
+
+function Builder.BuildMonster(art: MonsterArt, anchorPos: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = art.DisplayName
+	local s = art.Size
+	local primary = art.PrimaryColor
+	local accent = art.SecondaryColor
+	local belly = darken(primary, 0.15)
+
+	-- Body: rounded torso (slightly tapered).
+	local body = part("Body", Vector3.new(s.X, s.Y * 0.7, s.Z),
+		primary, Enum.Material.SmoothPlastic)
+	body.Position = anchorPos + Vector3.new(0, s.Y * 0.5, 0)
+	body.Parent = model
+
+	-- Belly underside (lighter / darker accent for visual depth).
+	local under = part("Belly", Vector3.new(s.X * 0.85, s.Y * 0.35, s.Z * 0.9),
+		belly, Enum.Material.SmoothPlastic)
+	under.CFrame = body.CFrame * CFrame.new(0, -s.Y * 0.18, 0)
+	under.Parent = model
+	weld(body, under)
+
+	-- Head: ball, leaning forward.
+	local headDia = math.max(s.X, s.Y) * 0.65
+	local head = ball("Head", headDia, primary, Enum.Material.SmoothPlastic)
+	head.CFrame = body.CFrame * CFrame.new(0, s.Y * 0.3, -s.Z * 0.55)
+	head.Parent = model
+	weld(body, head)
+
+	-- Eyes: two small dark balls, then white pupils.
+	for _, sx in ipairs({ -0.22, 0.22 }) do
+		local eye = ball("Eye", headDia * 0.28, Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic)
+		eye.CFrame = head.CFrame * CFrame.new(sx * headDia, 0.05 * headDia, -headDia * 0.42)
+		eye.Parent = model
+		weld(head, eye)
+		local pupil = ball("Pupil", headDia * 0.14, Color3.fromRGB(15, 15, 25), Enum.Material.SmoothPlastic)
+		pupil.CFrame = eye.CFrame * CFrame.new(0, 0, -headDia * 0.08)
+		pupil.Parent = model
+		weld(eye, pupil)
+	end
+
+	-- Ears / horns / fins — pick based on dominant type.
+	local primaryType = art.Types[1]
+	if primaryType == "Fire" or primaryType == "Dragon" or primaryType == "Rock" then
+		-- Two horns
+		for _, sx in ipairs({ -0.4, 0.4 }) do
+			local horn = part("Horn", Vector3.new(headDia * 0.18, headDia * 0.7, headDia * 0.18),
+				accent, Enum.Material.Slate)
+			horn.CFrame = head.CFrame * CFrame.new(sx * headDia, headDia * 0.55, headDia * 0.1)
+				* CFrame.Angles(math.rad(15), 0, math.rad(sx > 0 and 15 or -15))
+			horn.Parent = model
+			weld(head, horn)
+		end
+	elseif primaryType == "Flying" then
+		-- Two wings on the body.
+		for _, sx in ipairs({ -1, 1 }) do
+			local wing = part("Wing", Vector3.new(0.3, s.Y * 0.9, s.Z * 0.85),
+				accent, Enum.Material.SmoothPlastic)
+			wing.CFrame = body.CFrame * CFrame.new(sx * s.X * 0.55, 0, 0)
+				* CFrame.Angles(0, 0, math.rad(sx * 25))
+			wing.Parent = model
+			weld(body, wing)
+		end
+	elseif primaryType == "Water" or primaryType == "Ice" then
+		-- A single dorsal fin.
+		local fin = part("Fin", Vector3.new(0.3, s.Y * 0.7, s.Z * 0.6),
+			accent, Enum.Material.SmoothPlastic)
+		fin.CFrame = body.CFrame * CFrame.new(0, s.Y * 0.55, 0)
+			* CFrame.Angles(0, 0, 0)
+		fin.Parent = model
+		weld(body, fin)
+	else
+		-- Two ears.
+		for _, sx in ipairs({ -0.3, 0.3 }) do
+			local ear = part("Ear", Vector3.new(headDia * 0.18, headDia * 0.45, headDia * 0.05),
+				accent, Enum.Material.SmoothPlastic)
+			ear.CFrame = head.CFrame * CFrame.new(sx * headDia, headDia * 0.5, 0)
+				* CFrame.Angles(0, 0, math.rad(sx > 0 and -10 or 10))
+			ear.Parent = model
+			weld(head, ear)
+		end
+	end
+
+	-- Four legs (or two for flying / fish).
+	local legCount = (primaryType == "Flying" or primaryType == "Water") and 0 or 4
+	for i = 1, legCount do
+		local sx = (i % 2 == 0) and 1 or -1
+		local sz = (i <= 2) and -1 or 1
+		local leg = part("Leg", Vector3.new(s.X * 0.18, s.Y * 0.5, s.X * 0.18),
+			darken(primary, 0.1), Enum.Material.SmoothPlastic)
+		leg.CFrame = body.CFrame * CFrame.new(sx * s.X * 0.35, -s.Y * 0.5, sz * s.Z * 0.3)
+		leg.Parent = model
+		weld(body, leg)
+	end
+
+	-- Tail (most species).
+	if primaryType ~= "Ghost" then
+		local tail = part("Tail", Vector3.new(s.X * 0.25, s.Y * 0.3, s.Z * 0.5),
+			accent, Enum.Material.SmoothPlastic)
+		tail.CFrame = body.CFrame * CFrame.new(0, 0, s.Z * 0.55)
+			* CFrame.Angles(math.rad(-20), 0, 0)
+		tail.Parent = model
+		weld(body, tail)
+	end
+
+	-- Type particles attached to body.
+	attachParticles(body, art.Types)
+
+	-- Make the BODY collidable (others hover around the body) and unanchor
+	-- everything else so the welds drag them along.
+	body.CanCollide = true
+	body.Anchored = false
+	for _, child in ipairs(model:GetDescendants()) do
+		if child:IsA("BasePart") and child ~= body then
+			child.Anchored = false
+		end
+	end
+
+	model.PrimaryPart = body
+	breathe(body)
+	return model
+end
+
+-- ── NPC construction ────────────────────────────────────────────────────
+export type NpcArt = {
+	DisplayName: string,
+	HeadColor: Color3,
+	BodyColor: Color3,
+}
+
+function Builder.BuildNpc(art: NpcArt, pos: Vector3): Model
+	local model = Instance.new("Model")
+	model.Name = "NPC_" .. art.DisplayName
+
+	-- Torso
+	local torso = part("Body", Vector3.new(2.2, 2.4, 1.4), art.BodyColor, Enum.Material.Fabric)
+	torso.Position = pos + Vector3.new(0, 2.2, 0)
+	torso.Parent = model
+
+	-- Hips (wider)
+	local hips = part("Hips", Vector3.new(2.4, 0.6, 1.4), darken(art.BodyColor, 0.1), Enum.Material.Fabric)
+	hips.CFrame = torso.CFrame * CFrame.new(0, -1.5, 0)
+	hips.Parent = model
+	weld(torso, hips)
+
+	-- Legs
+	for _, sx in ipairs({ -0.6, 0.6 }) do
+		local leg = part("Leg", Vector3.new(0.9, 2.4, 1.0),
+			darken(art.BodyColor, 0.25), Enum.Material.Fabric)
+		leg.CFrame = hips.CFrame * CFrame.new(sx, -1.4, 0)
+		leg.Parent = model
+		weld(hips, leg)
+		local foot = part("Foot", Vector3.new(1.0, 0.4, 1.4),
+			Color3.fromRGB(50, 35, 25), Enum.Material.Wood)
+		foot.CFrame = leg.CFrame * CFrame.new(0, -1.4, 0.1)
+		foot.Parent = model
+		weld(leg, foot)
+	end
+
+	-- Arms
+	for _, sx in ipairs({ -1.4, 1.4 }) do
+		local arm = part("Arm", Vector3.new(0.7, 2.0, 0.9),
+			darken(art.BodyColor, 0.15), Enum.Material.Fabric)
+		arm.CFrame = torso.CFrame * CFrame.new(sx, -0.2, 0)
+			* CFrame.Angles(0, 0, math.rad(sx > 0 and -8 or 8))
+		arm.Parent = model
+		weld(torso, arm)
+		-- Hand
+		local hand = ball("Hand", 0.7, art.HeadColor, Enum.Material.SmoothPlastic)
+		hand.CFrame = arm.CFrame * CFrame.new(0, -1.1, 0)
+		hand.Parent = model
+		weld(arm, hand)
+	end
+
+	-- Neck
+	local neck = part("Neck", Vector3.new(0.6, 0.6, 0.6),
+		darken(art.HeadColor, 0.2), Enum.Material.SmoothPlastic)
+	neck.CFrame = torso.CFrame * CFrame.new(0, 1.4, 0)
+	neck.Parent = model
+	weld(torso, neck)
+
+	-- Head
+	local head = ball("Head", 1.6, art.HeadColor, Enum.Material.SmoothPlastic)
+	head.CFrame = neck.CFrame * CFrame.new(0, 1.0, 0)
+	head.Parent = model
+	weld(neck, head)
+
+	-- Eyes + pupils
+	for _, sx in ipairs({ -0.3, 0.3 }) do
+		local eye = ball("Eye", 0.32, Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic)
+		eye.CFrame = head.CFrame * CFrame.new(sx, 0.05, -0.7)
+		eye.Parent = model
+		weld(head, eye)
+		local pupil = ball("Pupil", 0.16, Color3.fromRGB(20, 20, 30), Enum.Material.SmoothPlastic)
+		pupil.CFrame = eye.CFrame * CFrame.new(0, 0, -0.1)
+		pupil.Parent = model
+		weld(eye, pupil)
+	end
+
+	-- Mouth (smile)
+	local mouth = part("Mouth", Vector3.new(0.8, 0.08, 0.05),
+		Color3.fromRGB(70, 30, 30), Enum.Material.SmoothPlastic)
+	mouth.CFrame = head.CFrame * CFrame.new(0, -0.35, -0.78)
+	mouth.Parent = model
+	weld(head, mouth)
+
+	-- Hair (simple cap)
+	local hair = part("Hair", Vector3.new(1.7, 0.6, 1.7),
+		Color3.fromRGB(60, 40, 25), Enum.Material.Fabric)
+	hair.CFrame = head.CFrame * CFrame.new(0, 0.7, 0.05)
+	hair.Parent = model
+	weld(head, hair)
+
+	-- Body collide; other parts ride along.
+	torso.CanCollide = true
+	torso.Anchored = false
+	for _, child in ipairs(model:GetDescendants()) do
+		if child:IsA("BasePart") and child ~= torso then
+			child.Anchored = false
+		end
+	end
+
+	model.PrimaryPart = torso
+	breathe(torso)
+	return model
+end
+
+return Builder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
           <string name="Name">GameConfig</string>
           <string name="Source"><![CDATA[--!strict
 -- Central game config. Tweak values here instead of chasing magic numbers.
@@ -92,7 +500,7 @@ return GameConfig
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="4">
+      <Item class="ModuleScript" referent="5">
         <Properties>
           <string name="Name">Inventory</string>
           <string name="Source"><![CDATA[--!strict
@@ -257,7 +665,7 @@ return Inventory
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">ItemData</string>
           <string name="Source"><![CDATA[--!strict
@@ -409,7 +817,7 @@ return M
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="6">
+      <Item class="ModuleScript" referent="7">
         <Properties>
           <string name="Name">LootData</string>
           <string name="Source"><![CDATA[--!strict
@@ -499,7 +907,7 @@ return Loot
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="7">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">MarketData</string>
           <string name="Source"><![CDATA[--!strict
@@ -555,7 +963,7 @@ return MarketData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">MonsterData</string>
           <string name="Source"><![CDATA[--!strict
@@ -954,7 +1362,7 @@ return M
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">QuestData</string>
           <string name="Source"><![CDATA[--!strict
@@ -1365,8 +1773,63 @@ return Quest
 ]]></string>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">UiKit</string>
+          <string name="Source"><![CDATA[--!strict
+-- Tiny shared widget kit used by every menu so the chrome looks uniform.
+
+local UiKit = {}
+
+-- Adds a square ✕ close button to the top-right of a frame. Calls onClose
+-- when clicked, or, if onClose is nil, just hides the parent ScreenGui.
+function UiKit.AddCloseButton(frame: GuiObject, onClose: (() -> ())?): TextButton
+	local btn = Instance.new("TextButton")
+	btn.Name = "CloseButton"
+	btn.AnchorPoint = Vector2.new(1, 0)
+	btn.Position = UDim2.new(1, -8, 0, 8)
+	btn.Size = UDim2.fromOffset(28, 28)
+	btn.Text = "✕"
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 16
+	btn.BackgroundColor3 = Color3.fromRGB(70, 40, 50)
+	btn.TextColor3 = Color3.fromRGB(240, 230, 220)
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.ZIndex = (frame.ZIndex or 1) + 5
+	btn.Parent = frame
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = btn
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(180, 90, 90)
+	stroke.Thickness = 1
+	stroke.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		if onClose then
+			onClose()
+		else
+			-- Walk up to the ScreenGui and hide it.
+			local gui: Instance? = frame
+			while gui and not gui:IsA("ScreenGui") do
+				gui = gui.Parent
+			end
+			if gui then (gui :: ScreenGui).Enabled = false end
+		end
+	end)
+
+	return btn
+end
+
+return UiKit
+]]></string>
+        </Properties>
+      </Item>
     </Item>
-    <Item class="ModuleScript" referent="10">
+    <Item class="ModuleScript" referent="12">
       <Properties>
         <string name="Name">Remotes</string>
         <string name="Source"><![CDATA[--!strict
@@ -1451,11 +1914,11 @@ return Remotes
       </Properties>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="11">
+  <Item class="ServerScriptService" referent="13">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="12">
+    <Item class="Script" referent="14">
       <Properties>
         <string name="Name">BoatHandler</string>
         <token name="RunContext">0</token>
@@ -1546,7 +2009,7 @@ CollectionService:GetInstanceAddedSignal("Boat"):Connect(bindBoat)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="13">
+    <Item class="Script" referent="15">
       <Properties>
         <string name="Name">CombatHandler</string>
         <token name="RunContext">0</token>
@@ -1632,7 +2095,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="14">
+    <Item class="Script" referent="16">
       <Properties>
         <string name="Name">LootHandler</string>
         <token name="RunContext">0</token>
@@ -1790,7 +2253,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="15">
+    <Item class="Script" referent="17">
       <Properties>
         <string name="Name">MarketHandler</string>
         <token name="RunContext">0</token>
@@ -1893,7 +2356,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="16">
+    <Item class="Script" referent="18">
       <Properties>
         <string name="Name">ModMenuHandler</string>
         <token name="RunContext">0</token>
@@ -2068,7 +2531,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="17">
+    <Item class="Script" referent="19">
       <Properties>
         <string name="Name">MonsterSpawner</string>
         <token name="RunContext">0</token>
@@ -2084,6 +2547,7 @@ local CollectionService = game:GetService("CollectionService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local GameConfig = require(Modules:WaitForChild("GameConfig"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local CharacterBuilder = require(Modules:WaitForChild("CharacterBuilder"))
 
 -- Wait for WorldBuilder to finish.
 while not _G.WorldState do task.wait(0.1) end
@@ -2123,31 +2587,13 @@ end
 
 -- ── Model factory ────────────────────────────────────────────────────────
 local function buildMonsterModel(def: MonsterData.MonsterDef, pos: Vector3): Model
-	local model = Instance.new("Model")
-	model.Name = def.DisplayName
-
-	local body = Instance.new("Part")
-	body.Name = "Body"
-	body.Size = def.Size
-	body.Color = def.PrimaryColor
-	body.Material = Enum.Material.SmoothPlastic
-	body.Position = pos + Vector3.new(0, def.Size.Y / 2, 0)
-	body.Anchored = false
-	body.CanCollide = true
-	body.Parent = model
-
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Size = Vector3.new(def.Size.X * 0.7, def.Size.Y * 0.7, def.Size.X * 0.7)
-	head.Color = def.SecondaryColor
-	head.Material = Enum.Material.SmoothPlastic
-	head.Position = body.Position + Vector3.new(0, def.Size.Y * 0.7, -def.Size.Z * 0.4)
-	head.Parent = model
-
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = body
-	weld.Part1 = head
-	weld.Parent = body
+	local model = CharacterBuilder.BuildMonster({
+		DisplayName = def.DisplayName,
+		Types = def.Types,
+		Size = def.Size,
+		PrimaryColor = def.PrimaryColor,
+		SecondaryColor = def.SecondaryColor,
+	}, pos)
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = def.BaseHP
@@ -2155,8 +2601,6 @@ local function buildMonsterModel(def: MonsterData.MonsterDef, pos: Vector3): Mod
 	humanoid.WalkSpeed = def.BaseSpeed
 	humanoid.DisplayName = def.DisplayName
 	humanoid.Parent = model
-
-	model.PrimaryPart = body
 
 	-- Data the rest of the server reads off of the instance.
 	local idTag = Instance.new("StringValue")
@@ -2246,7 +2690,7 @@ end
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="18">
+    <Item class="Script" referent="20">
       <Properties>
         <string name="Name">PlayerDataHandler</string>
         <token name="RunContext">0</token>
@@ -2409,7 +2853,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="19">
+    <Item class="Script" referent="21">
       <Properties>
         <string name="Name">QuestHandler</string>
         <token name="RunContext">0</token>
@@ -2431,6 +2875,7 @@ local RunService = game:GetService("RunService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local Quest = require(Modules:WaitForChild("QuestData"))
 local Inventory = require(Modules:WaitForChild("Inventory"))
+local CharacterBuilder = require(Modules:WaitForChild("CharacterBuilder"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 while not _G.WorldState do task.wait(0.1) end
@@ -2466,27 +2911,16 @@ local function C(rgb: { number }): Color3
 end
 
 local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
-	local model = Instance.new("Model")
+	local model = CharacterBuilder.BuildNpc({
+		DisplayName = def.DisplayName,
+		HeadColor = C(def.HeadColor),
+		BodyColor = C(def.BodyColor),
+	}, pos)
 	model.Name = "NPC_" .. def.Id
 
-	local body = Instance.new("Part")
-	body.Name = "Body"
-	body.Size = Vector3.new(2.2, 3.4, 1.6)
-	body.Color = C(def.BodyColor)
-	body.Material = Enum.Material.Fabric
-	body.Position = pos + Vector3.new(0, 1.7, 0)
-	body.Anchored = true
-	body.Parent = model
-
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Shape = Enum.PartType.Ball
-	head.Size = Vector3.new(1.6, 1.6, 1.6)
-	head.Color = C(def.HeadColor)
-	head.Material = Enum.Material.SmoothPlastic
-	head.Position = body.Position + Vector3.new(0, 2.4, 0)
-	head.Anchored = true
-	head.Parent = model
+	-- Anchor only the torso so physics settles on a stable foot.
+	local torso = model.PrimaryPart
+	if torso then torso.Anchored = true end
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = 100
@@ -2495,21 +2929,24 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	humanoid.WalkSpeed = 0
 	humanoid.Parent = model
 
-	local label = Instance.new("BillboardGui")
-	label.Adornee = head
-	label.Size = UDim2.fromOffset(220, 40)
-	label.StudsOffset = Vector3.new(0, 2, 0)
-	label.AlwaysOnTop = true
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Text = def.DisplayName
-	t.Font = Enum.Font.FredokaOne
-	t.TextSize = 18
-	t.TextColor3 = Color3.fromRGB(255, 240, 200)
-	t.TextStrokeTransparency = 0
-	t.Parent = label
-	label.Parent = head
+	local head = model:FindFirstChild("Head") :: BasePart?
+	if head then
+		local label = Instance.new("BillboardGui")
+		label.Adornee = head
+		label.Size = UDim2.fromOffset(220, 40)
+		label.StudsOffset = Vector3.new(0, 2, 0)
+		label.AlwaysOnTop = true
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = def.DisplayName
+		t.Font = Enum.Font.FredokaOne
+		t.TextSize = 18
+		t.TextColor3 = Color3.fromRGB(255, 240, 200)
+		t.TextStrokeTransparency = 0
+		t.Parent = label
+		label.Parent = head
+	end
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = "Talk"
@@ -2517,7 +2954,7 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	prompt.HoldDuration = 0.2
 	prompt.MaxActivationDistance = 12
 	prompt.RequiresLineOfSight = false
-	prompt.Parent = body
+	if torso then prompt.Parent = torso end
 
 	local idTag = Instance.new("StringValue")
 	idTag.Name = "NpcId"
@@ -2525,9 +2962,59 @@ local function buildNpcModel(def: Quest.NpcDef, pos: Vector3): Model
 	idTag.Parent = model
 
 	model:AddTag("NPC")
-	model.PrimaryPart = body
 	model.Parent = NPCS_FOLDER
 	return model
+end
+
+-- Idle chatter: every NPC says one of a few lines every ~30 seconds with a
+-- chat-style billboard above their head. Adds life without external assets.
+local CHATTER: { [string]: { string } } = {
+	tavi = { "Coins keep what's left of Aethel turning.", "Need a trap? I sell good ones.",
+		"Look at this fragment a traveler sold me…", "Quiet day at the stalls." },
+	sagewind = { "Take a potion. Don't argue.", "I dreamt of green farms again last night.",
+		"Trapping isn't the same as healing." },
+	marla = { "The fire keeps going out.", "I knew the people these were once.",
+		"Stay close to the camp." },
+	bren = { "Look — the soil's still warm.", "If we cure them, do they remember the planting?",
+		"Three sprout cubs and I'll know more." },
+	elin = { "The thirty are the old population.", "The Compendium is half done.",
+		"Each fragment was hidden by someone who hoped." },
+	heart_envoy = { "The Heart sleeps.", "Bring four fragments — or one weapon.",
+		"Both endings are honest." },
+}
+
+local function spawnChatter(model: Model, npcId: string, head: BasePart)
+	local lines = CHATTER[npcId]
+	if not lines then return end
+	local bubble = Instance.new("BillboardGui")
+	bubble.Adornee = head
+	bubble.Size = UDim2.fromOffset(260, 60)
+	bubble.StudsOffset = Vector3.new(0, 4, 0)
+	bubble.AlwaysOnTop = true
+	bubble.Enabled = false
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+	t.BackgroundTransparency = 0.2
+	t.TextColor3 = Color3.fromRGB(240, 230, 200)
+	t.Font = Enum.Font.Gotham
+	t.TextSize = 13
+	t.TextWrapped = true
+	t.Text = ""
+	t.Parent = bubble
+	Instance.new("UICorner", t).CornerRadius = UDim.new(0, 8)
+	bubble.Parent = head
+
+	task.spawn(function()
+		task.wait(math.random(5, 25))
+		while model.Parent do
+			t.Text = lines[math.random(1, #lines)]
+			bubble.Enabled = true
+			task.wait(5)
+			bubble.Enabled = false
+			task.wait(math.random(20, 45))
+		end
+	end)
 end
 
 -- Spawn all NPCs.
@@ -2535,7 +3022,10 @@ local npcModels: { [string]: Model } = {}
 for _, def in ipairs(Quest.Npcs) do
 	local pos = anchorPosition(def.Anchor)
 	if pos then
-		npcModels[def.Id] = buildNpcModel(def, pos)
+		local model = buildNpcModel(def, pos)
+		npcModels[def.Id] = model
+		local head = model:FindFirstChild("Head") :: BasePart?
+		if head then spawnChatter(model, def.Id, head) end
 	end
 end
 
@@ -2888,7 +3378,7 @@ print(("[QuestHandler] spawned %d NPCs, %d quests, %d endings"):format(
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="20">
+    <Item class="Script" referent="22">
       <Properties>
         <string name="Name">TradeHandler</string>
         <token name="RunContext">0</token>
@@ -3221,7 +3711,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="21">
+    <Item class="Script" referent="23">
       <Properties>
         <string name="Name">TrapHandler</string>
         <token name="RunContext">0</token>
@@ -3318,7 +3808,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="22">
+    <Item class="Script" referent="24">
       <Properties>
         <string name="Name">UseItemHandler</string>
         <token name="RunContext">0</token>
@@ -3382,7 +3872,7 @@ end)
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Script" referent="23">
+    <Item class="Script" referent="25">
       <Properties>
         <string name="Name">WorldBuilder</string>
         <token name="RunContext">0</token>
@@ -3546,7 +4036,7 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	base.Size = Vector3.new(16, 10, 14)
 	base.Position = pos + Vector3.new(0, 5, 0)
 	base.Color = Color3.fromRGB(120, 80, 50)
-	base.Material = Enum.Material.Wood
+	base.Material = Enum.Material.WoodPlanks
 	base.Parent = model
 
 	local roof = Instance.new("WedgePart")
@@ -3557,6 +4047,7 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	roof.Material = Enum.Material.Slate
 	roof.Parent = model
 
+	-- Door (slightly inset wood-grain).
 	local door = Instance.new("Part")
 	door.Anchored = true
 	door.Size = Vector3.new(3.5, 6, 0.4)
@@ -3565,11 +4056,69 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	door.Material = Enum.Material.Wood
 	door.Parent = model
 
-	local light = Instance.new("PointLight")
-	light.Range = 24
-	light.Brightness = 1.4
-	light.Color = Color3.fromRGB(255, 200, 120)
-	light.Parent = base
+	local handle = Instance.new("Part")
+	handle.Anchored = true; handle.Shape = Enum.PartType.Ball
+	handle.Size = Vector3.new(0.4, 0.4, 0.4)
+	handle.Position = door.Position + Vector3.new(1.2, 0, -0.3)
+	handle.Color = Color3.fromRGB(220, 180, 60); handle.Material = Enum.Material.Metal
+	handle.Parent = model
+
+	-- Two glowing windows.
+	for _, sx in ipairs({ -4, 4 }) do
+		local frame = Instance.new("Part")
+		frame.Anchored = true
+		frame.Size = Vector3.new(3.4, 3.4, 0.6)
+		frame.CFrame = CFrame.new(pos + Vector3.new(sx, 5, -7))
+		frame.Color = Color3.fromRGB(60, 40, 20)
+		frame.Material = Enum.Material.Wood
+		frame.Parent = model
+
+		local glass = Instance.new("Part")
+		glass.Anchored = true
+		glass.Size = Vector3.new(2.6, 2.6, 0.2)
+		glass.CFrame = CFrame.new(pos + Vector3.new(sx, 5, -7.2))
+		glass.Color = Color3.fromRGB(255, 220, 140)
+		glass.Material = Enum.Material.Neon
+		glass.Transparency = 0.2
+		glass.Parent = model
+
+		local muntin = Instance.new("Part")
+		muntin.Anchored = true
+		muntin.Size = Vector3.new(2.6, 0.2, 0.3)
+		muntin.CFrame = glass.CFrame
+		muntin.Color = Color3.fromRGB(60, 40, 20)
+		muntin.Material = Enum.Material.Wood
+		muntin.Parent = model
+	end
+
+	-- Stone chimney with smoke.
+	local chimney = Instance.new("Part")
+	chimney.Anchored = true
+	chimney.Size = Vector3.new(2.2, 8, 2.2)
+	chimney.CFrame = CFrame.new(pos + Vector3.new(6, 14, 5))
+	chimney.Color = Color3.fromRGB(110, 100, 95); chimney.Material = Enum.Material.Slate
+	chimney.Parent = model
+	local smoke = Instance.new("Smoke")
+	smoke.Size = 3; smoke.Opacity = 0.4; smoke.RiseVelocity = 4
+	smoke.Color = Color3.fromRGB(220, 220, 220)
+	smoke.Parent = chimney
+
+	-- Lantern by the door.
+	local lantern = Instance.new("Part")
+	lantern.Anchored = true; lantern.Shape = Enum.PartType.Ball
+	lantern.Size = Vector3.new(1, 1, 1)
+	lantern.Position = pos + Vector3.new(2.5, 6, -7.2)
+	lantern.Color = Color3.fromRGB(255, 200, 100)
+	lantern.Material = Enum.Material.Neon
+	lantern.Parent = model
+	local lampLight = Instance.new("PointLight")
+	lampLight.Range = 20; lampLight.Brightness = 2; lampLight.Color = Color3.fromRGB(255, 200, 120)
+	lampLight.Parent = lantern
+
+	local interiorLight = Instance.new("PointLight")
+	interiorLight.Range = 28; interiorLight.Brightness = 1.5
+	interiorLight.Color = Color3.fromRGB(255, 200, 120)
+	interiorLight.Parent = base
 
 	model.PrimaryPart = base
 end
@@ -3580,41 +4129,87 @@ local function buildCamp(pos: Vector3, parent: Instance)
 	model.Name = "Camp"
 	model.Parent = parent
 
-	-- Fire pit
+	-- Stone ring around the fire pit.
+	for i = 0, 7 do
+		local angle = (i / 8) * math.pi * 2
+		local stone = Instance.new("Part")
+		stone.Anchored = true
+		stone.Shape = Enum.PartType.Ball
+		stone.Size = Vector3.new(1.4, 1.4, 1.4)
+		stone.Position = pos + Vector3.new(math.cos(angle) * 3, 0.7, math.sin(angle) * 3)
+		stone.Color = Color3.fromRGB(110, 100, 95)
+		stone.Material = Enum.Material.Slate
+		stone.Parent = model
+	end
+
+	-- Logs on the fire.
+	for _, ang in ipairs({ 30, -30 }) do
+		local log = Instance.new("Part")
+		log.Anchored = true; log.Shape = Enum.PartType.Cylinder
+		log.Size = Vector3.new(3, 0.8, 0.8)
+		log.CFrame = CFrame.new(pos + Vector3.new(0, 1.0, 0))
+			* CFrame.Angles(0, math.rad(ang), 0)
+		log.Color = Color3.fromRGB(80, 50, 30); log.Material = Enum.Material.Wood
+		log.Parent = model
+	end
+
+	-- Fire on top.
 	local pit = Instance.new("Part")
 	pit.Shape = Enum.PartType.Cylinder
 	pit.Anchored = true
-	pit.Size = Vector3.new(1, 5, 5)
-	pit.CFrame = CFrame.new(pos + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	pit.Color = Color3.fromRGB(40, 30, 25)
-	pit.Material = Enum.Material.Slate
+	pit.Size = Vector3.new(0.4, 5, 5)
+	pit.CFrame = CFrame.new(pos + Vector3.new(0, 1.4, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pit.Color = Color3.fromRGB(60, 40, 30); pit.Material = Enum.Material.Slate
+	pit.Transparency = 0.7
 	pit.Parent = model
 
 	local fire = Instance.new("Fire")
-	fire.Size = 8
-	fire.Heat = 12
+	fire.Size = 10; fire.Heat = 14
 	fire.Parent = pit
+	local fireGlow = Instance.new("PointLight")
+	fireGlow.Range = 22; fireGlow.Brightness = 2.2
+	fireGlow.Color = Color3.fromRGB(255, 160, 80)
+	fireGlow.Parent = pit
+
+	-- Three logs to sit on around the perimeter.
+	for i = 1, 3 do
+		local angle = (i / 3) * math.pi * 2
+		local log = Instance.new("Part")
+		log.Anchored = true; log.Shape = Enum.PartType.Cylinder
+		log.Size = Vector3.new(5, 1.2, 1.2)
+		log.CFrame = CFrame.new(pos + Vector3.new(math.cos(angle) * 6, 0.6, math.sin(angle) * 6))
+			* CFrame.Angles(0, angle + math.pi / 2, 0)
+		log.Color = Color3.fromRGB(95, 65, 40); log.Material = Enum.Material.Wood
+		log.Parent = model
+	end
 
 	-- Two tents flanking the pit.
 	for i = 1, 2 do
 		local tent = Instance.new("WedgePart")
 		tent.Anchored = true
 		tent.Size = Vector3.new(8, 5, 6)
-		local offset = Vector3.new(if i == 1 then -7 else 7, 2.5, 4)
+		local offset = Vector3.new(if i == 1 then -10 else 10, 2.5, 4)
 		tent.CFrame = CFrame.new(pos + offset) * CFrame.Angles(0, math.rad(if i == 1 then 90 else -90), 0)
 		tent.Color = Color3.fromRGB(150, 120, 80)
 		tent.Material = Enum.Material.Fabric
 		tent.Parent = model
+
+		-- Tent pole front.
+		local pole = Instance.new("Part")
+		pole.Anchored = true
+		pole.Size = Vector3.new(0.3, 5, 0.3)
+		pole.Position = tent.Position + Vector3.new(0, 0, -2.5)
+		pole.Color = Color3.fromRGB(80, 50, 30); pole.Material = Enum.Material.Wood
+		pole.Parent = model
 	end
 
-	-- Small crate (lootable hook; CombatHandler's pickup system looks for this name).
+	-- Small crate (lootable hook).
 	local crate = Instance.new("Part")
 	crate.Name = "LootCrate"
 	crate.Anchored = true
 	crate.Size = Vector3.new(3, 3, 3)
-	crate.CFrame = CFrame.new(pos + Vector3.new(6, 1.5, -4))
-	crate.Color = Color3.fromRGB(100, 70, 40)
-	crate.Material = Enum.Material.WoodPlanks
+	crate.CFrame = CFrame.new(pos + Vector3.new(8, 1.5, -4))
+	crate.Color = Color3.fromRGB(100, 70, 40); crate.Material = Enum.Material.WoodPlanks
 	crate.Parent = model
 end
 
@@ -3649,6 +4244,45 @@ local function buildCave(pos: Vector3, parent: Instance)
 	portal.Material = Enum.Material.SmoothPlastic
 	portal.Transparency = 0.1
 	portal.Parent = model
+
+	-- Glowing crystals scattered around the portal — mire-tinged purple.
+	local crystalColors = {
+		Color3.fromRGB(120, 80, 220),
+		Color3.fromRGB(80, 200, 220),
+		Color3.fromRGB(220, 100, 180),
+	}
+	for i = 1, 6 do
+		local crystal = Instance.new("Part")
+		crystal.Anchored = true
+		crystal.Size = Vector3.new(rng:NextNumber(0.6, 1.4), rng:NextNumber(2, 4), rng:NextNumber(0.6, 1.4))
+		local a = (i / 6) * math.pi * 2
+		crystal.CFrame = CFrame.new(pos + Vector3.new(math.cos(a) * 8, 1.5, math.sin(a) * 8))
+			* CFrame.Angles(math.rad(rng:NextNumber(-15, 15)), 0, math.rad(rng:NextNumber(-15, 15)))
+		crystal.Color = crystalColors[((i - 1) % #crystalColors) + 1]
+		crystal.Material = Enum.Material.Neon
+		crystal.Transparency = 0.15
+		crystal.Parent = model
+
+		local glow = Instance.new("PointLight")
+		glow.Range = 10
+		glow.Brightness = 1.4
+		glow.Color = crystal.Color
+		glow.Parent = crystal
+	end
+
+	-- Eerie cold mist drifting from the portal.
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(Color3.fromRGB(180, 180, 220))
+	mist.Rate = 6
+	mist.Lifetime = NumberRange.new(2, 4)
+	mist.Speed = NumberRange.new(1, 2)
+	mist.Size = NumberSequence.new(3)
+	mist.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	mist.Parent = portal
 
 	table.insert(WorldState.CavePortals, portal.Position)
 end
@@ -4117,30 +4751,30 @@ print(("[WorldBuilder] anchors=%d cabins=%d camps=%d caves=%d lakes=%d boats=%d 
       </Properties>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="24">
+  <Item class="ServerStorage" referent="26">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="25">
+  <Item class="StarterGui" referent="27">
     <Properties>
       <string name="Name">StarterGui</string>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="26">
+  <Item class="StarterPlayer" referent="28">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="27">
+    <Item class="StarterCharacterScripts" referent="29">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="28">
+    <Item class="StarterPlayerScripts" referent="30">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="29">
+      <Item class="LocalScript" referent="31">
         <Properties>
           <string name="Name">BackpackGui</string>
           <string name="Source"><![CDATA[--!strict
@@ -4155,6 +4789,7 @@ local UserInputService = game:GetService("UserInputService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -4175,6 +4810,8 @@ frame.BorderSizePixel = 0
 frame.Parent = screen
 
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 40)
@@ -4311,7 +4948,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="30">
+      <Item class="LocalScript" referent="32">
         <Properties>
           <string name="Name">CombatClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -4391,6 +5028,17 @@ local function attemptThrow(target: Model?)
 	if t then Remotes.Events.ThrowTrap:FireServer(selectedTrapId, t) end
 end
 
+-- "Trap aim mode" — when ON, the next tap on a monster throws the selected
+-- trap instead of attacking. The mode auto-disengages after one throw, or
+-- stays on if `trapModeSticky` is true (set by the action bar's long press).
+local trapMode = false
+local trapModeSticky = false
+
+local function setTrapMode(on: boolean, sticky: boolean?)
+	trapMode = on
+	trapModeSticky = sticky == true
+end
+
 -- ── Input: handles mouse click AND touch tap ─────────────────────────────
 -- We ignore taps that landed on GUI (processed = true).
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -4402,11 +5050,19 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		local pos = input.Position  -- Vector3 on touch, Vector2-ish on mouse
 		local target = monsterUnderScreenPoint(pos.X, pos.Y)
 		if target then
-			attemptAttack(target)
+			if trapMode then
+				attemptThrow(target)
+				if not trapModeSticky then trapMode = false end
+			else
+				attemptAttack(target)
+			end
 		end
 	elseif input.KeyCode == Enum.KeyCode.F then
 		local loc = UserInputService:GetMouseLocation()
 		attemptThrow(monsterUnderScreenPoint(loc.X, loc.Y))
+	elseif input.KeyCode == Enum.KeyCode.G then
+		-- Toggle "trap aim mode" — next click throws.
+		setTrapMode(not trapMode, true)
 	elseif input.KeyCode == Enum.KeyCode.One then selectedTrapId = "trap_basic"
 	elseif input.KeyCode == Enum.KeyCode.Two then selectedTrapId = "trap_strong"
 	elseif input.KeyCode == Enum.KeyCode.Three then selectedTrapId = "trap_shock"
@@ -4421,12 +5077,14 @@ _G.Combat = {
 	SetTrap = function(id: string) selectedTrapId = id end,
 	Attack = attemptAttack,
 	Throw = attemptThrow,
+	SetTrapMode = setTrapMode,
+	IsTrapMode = function() return trapMode end,
 }
 _G.SelectedTrap = function() return selectedTrapId end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="31">
+      <Item class="LocalScript" referent="33">
         <Properties>
           <string name="Name">HUD</string>
           <string name="Source"><![CDATA[--!strict
@@ -4509,7 +5167,7 @@ RunService.Heartbeat:Connect(refresh)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="32">
+      <Item class="LocalScript" referent="34">
         <Properties>
           <string name="Name">MarketGui</string>
           <string name="Source"><![CDATA[--!strict
@@ -4525,6 +5183,7 @@ local Workspace = game:GetService("Workspace")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -4550,6 +5209,8 @@ frame.BackgroundColor3 = Color3.fromRGB(22, 20, 30)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)
@@ -4842,7 +5503,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="33">
+      <Item class="LocalScript" referent="35">
         <Properties>
           <string name="Name">MobileActionBar</string>
           <string name="Source"><![CDATA[--!strict
@@ -4953,12 +5614,68 @@ trapBtn.MouseButton1Click:Connect(function()
 	refreshTrapLabel()
 end)
 
+-- CATCH button:
+--   · short tap          → immediate throw at the nearest monster
+--   · long press (>0.5s) → enter "trap aim mode": next tap on a monster
+--                          throws the trap. Tap CATCH again to exit.
+local pressStart = 0
+local trapModeOn = false
+
+local function setTrapModeBtn(on: boolean)
+	trapModeOn = on
+	if _G.Combat then _G.Combat.SetTrapMode(on, on) end
+	catchBtn.BackgroundColor3 = on
+		and Color3.fromRGB(220, 130, 60)
+		or Color3.fromRGB(130, 200, 220)
+	catchBtn.Text = on and "AIM\nTRAP" or "CATCH"
+end
+
+catchBtn.MouseButton1Down:Connect(function() pressStart = os.clock() end)
+catchBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		pressStart = os.clock()
+	end
+end)
+
 catchBtn.MouseButton1Click:Connect(function()
-	if _G.Combat then _G.Combat.Throw(nil) end
+	if trapModeOn then
+		setTrapModeBtn(false)
+		return
+	end
+	if pressStart > 0 and os.clock() - pressStart > 0.5 then
+		setTrapModeBtn(true)
+	else
+		if _G.Combat then _G.Combat.Throw(nil) end
+	end
+	pressStart = 0
 end)
 
 attackBtn.MouseButton1Click:Connect(function()
+	if trapModeOn then setTrapModeBtn(false) end
 	if _G.Combat then _G.Combat.Attack(nil) end
+end)
+
+-- Banner shown across the top of the screen when aim mode is on.
+local banner = Instance.new("TextLabel")
+banner.AnchorPoint = Vector2.new(0.5, 0)
+banner.Position = UDim2.new(0.5, 0, 0, 80)
+banner.Size = UDim2.fromOffset(280, 32)
+banner.BackgroundColor3 = Color3.fromRGB(220, 130, 60)
+banner.BackgroundTransparency = 0.1
+banner.BorderSizePixel = 0
+banner.Font = Enum.Font.GothamBold
+banner.TextSize = 14
+banner.TextColor3 = Color3.fromRGB(30, 20, 10)
+banner.Text = "Tap a monster to throw the trap"
+banner.Visible = false
+banner.Parent = screen
+Instance.new("UICorner", banner).CornerRadius = UDim.new(0, 8)
+
+task.spawn(function()
+	while true do
+		task.wait(0.15)
+		banner.Visible = trapModeOn
+	end
 end)
 
 -- Hide the bar on large-screen PCs so it doesn't clutter. Heuristic: if
@@ -4973,7 +5690,7 @@ UserInputService:GetPropertyChangedSignal("TouchEnabled"):Connect(updateVisibili
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="34">
+      <Item class="LocalScript" referent="36">
         <Properties>
           <string name="Name">ModMenuGui</string>
           <string name="Source"><![CDATA[--!strict
@@ -4990,6 +5707,7 @@ local Workspace = game:GetService("Workspace")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local GameConfig = require(Modules:WaitForChild("GameConfig"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -5015,6 +5733,8 @@ frame.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local stroke = Instance.new("UIStroke")
 stroke.Color = Color3.fromRGB(210, 180, 90)
@@ -5490,7 +6210,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="35">
+      <Item class="LocalScript" referent="37">
         <Properties>
           <string name="Name">Notifications</string>
           <string name="Source"><![CDATA[--!strict
@@ -5554,7 +6274,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="36">
+      <Item class="LocalScript" referent="38">
         <Properties>
           <string name="Name">PlayerSaveCache</string>
           <string name="Source"><![CDATA[--!strict
@@ -5588,7 +6308,7 @@ return Cache
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="37">
+      <Item class="LocalScript" referent="39">
         <Properties>
           <string name="Name">StoryGui</string>
           <string name="Source"><![CDATA[--!strict
@@ -5605,6 +6325,7 @@ local TweenService = game:GetService("TweenService")
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local QuestData = require(Modules:WaitForChild("QuestData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -5755,6 +6476,8 @@ dlgFrame.BackgroundTransparency = 0.05
 dlgFrame.BorderSizePixel = 0
 dlgFrame.Parent = dlgGui
 Instance.new("UICorner", dlgFrame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(dlgFrame)
 local dlgStroke = Instance.new("UIStroke")
 dlgStroke.Color = Color3.fromRGB(200, 170, 80)
 dlgStroke.Thickness = 1.5
@@ -5950,6 +6673,8 @@ jFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
 jFrame.BorderSizePixel = 0
 jFrame.Parent = journalGui
 Instance.new("UICorner", jFrame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(jFrame)
 
 local jTitle = Instance.new("TextLabel")
 jTitle.Size = UDim2.new(1, 0, 0, 40)
@@ -6169,7 +6894,7 @@ qBtn.MouseButton1Click:Connect(toggleJournal)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="LocalScript" referent="38">
+      <Item class="LocalScript" referent="40">
         <Properties>
           <string name="Name">TradeGui</string>
           <string name="Source"><![CDATA[--!strict
@@ -6186,6 +6911,7 @@ local UserInputService = game:GetService("UserInputService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -6208,6 +6934,13 @@ frame.BackgroundColor3 = Color3.fromRGB(20, 22, 36)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame, function()
+	-- The server's TradeCancel handler is a no-op when there's no session,
+	-- so we can fire it unconditionally to keep this closure simple.
+	Remotes.Events.TradeCancel:FireServer()
+	screen.Enabled = false
+end)
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)
@@ -6630,7 +7363,7 @@ end)
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="39">
+  <Item class="Workspace" referent="41">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -36,6 +37,8 @@ frame.BackgroundColor3 = Color3.fromRGB(22, 20, 30)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)

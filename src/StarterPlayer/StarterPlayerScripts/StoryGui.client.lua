@@ -12,6 +12,7 @@ local TweenService = game:GetService("TweenService")
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local QuestData = require(Modules:WaitForChild("QuestData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -162,6 +163,8 @@ dlgFrame.BackgroundTransparency = 0.05
 dlgFrame.BorderSizePixel = 0
 dlgFrame.Parent = dlgGui
 Instance.new("UICorner", dlgFrame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(dlgFrame)
 local dlgStroke = Instance.new("UIStroke")
 dlgStroke.Color = Color3.fromRGB(200, 170, 80)
 dlgStroke.Thickness = 1.5
@@ -357,6 +360,8 @@ jFrame.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
 jFrame.BorderSizePixel = 0
 jFrame.Parent = journalGui
 Instance.new("UICorner", jFrame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(jFrame)
 
 local jTitle = Instance.new("TextLabel")
 jTitle.Size = UDim2.new(1, 0, 0, 40)

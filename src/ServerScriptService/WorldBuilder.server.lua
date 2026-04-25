@@ -158,7 +158,7 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	base.Size = Vector3.new(16, 10, 14)
 	base.Position = pos + Vector3.new(0, 5, 0)
 	base.Color = Color3.fromRGB(120, 80, 50)
-	base.Material = Enum.Material.Wood
+	base.Material = Enum.Material.WoodPlanks
 	base.Parent = model
 
 	local roof = Instance.new("WedgePart")
@@ -169,6 +169,7 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	roof.Material = Enum.Material.Slate
 	roof.Parent = model
 
+	-- Door (slightly inset wood-grain).
 	local door = Instance.new("Part")
 	door.Anchored = true
 	door.Size = Vector3.new(3.5, 6, 0.4)
@@ -177,11 +178,69 @@ local function buildCabin(pos: Vector3, parent: Instance)
 	door.Material = Enum.Material.Wood
 	door.Parent = model
 
-	local light = Instance.new("PointLight")
-	light.Range = 24
-	light.Brightness = 1.4
-	light.Color = Color3.fromRGB(255, 200, 120)
-	light.Parent = base
+	local handle = Instance.new("Part")
+	handle.Anchored = true; handle.Shape = Enum.PartType.Ball
+	handle.Size = Vector3.new(0.4, 0.4, 0.4)
+	handle.Position = door.Position + Vector3.new(1.2, 0, -0.3)
+	handle.Color = Color3.fromRGB(220, 180, 60); handle.Material = Enum.Material.Metal
+	handle.Parent = model
+
+	-- Two glowing windows.
+	for _, sx in ipairs({ -4, 4 }) do
+		local frame = Instance.new("Part")
+		frame.Anchored = true
+		frame.Size = Vector3.new(3.4, 3.4, 0.6)
+		frame.CFrame = CFrame.new(pos + Vector3.new(sx, 5, -7))
+		frame.Color = Color3.fromRGB(60, 40, 20)
+		frame.Material = Enum.Material.Wood
+		frame.Parent = model
+
+		local glass = Instance.new("Part")
+		glass.Anchored = true
+		glass.Size = Vector3.new(2.6, 2.6, 0.2)
+		glass.CFrame = CFrame.new(pos + Vector3.new(sx, 5, -7.2))
+		glass.Color = Color3.fromRGB(255, 220, 140)
+		glass.Material = Enum.Material.Neon
+		glass.Transparency = 0.2
+		glass.Parent = model
+
+		local muntin = Instance.new("Part")
+		muntin.Anchored = true
+		muntin.Size = Vector3.new(2.6, 0.2, 0.3)
+		muntin.CFrame = glass.CFrame
+		muntin.Color = Color3.fromRGB(60, 40, 20)
+		muntin.Material = Enum.Material.Wood
+		muntin.Parent = model
+	end
+
+	-- Stone chimney with smoke.
+	local chimney = Instance.new("Part")
+	chimney.Anchored = true
+	chimney.Size = Vector3.new(2.2, 8, 2.2)
+	chimney.CFrame = CFrame.new(pos + Vector3.new(6, 14, 5))
+	chimney.Color = Color3.fromRGB(110, 100, 95); chimney.Material = Enum.Material.Slate
+	chimney.Parent = model
+	local smoke = Instance.new("Smoke")
+	smoke.Size = 3; smoke.Opacity = 0.4; smoke.RiseVelocity = 4
+	smoke.Color = Color3.fromRGB(220, 220, 220)
+	smoke.Parent = chimney
+
+	-- Lantern by the door.
+	local lantern = Instance.new("Part")
+	lantern.Anchored = true; lantern.Shape = Enum.PartType.Ball
+	lantern.Size = Vector3.new(1, 1, 1)
+	lantern.Position = pos + Vector3.new(2.5, 6, -7.2)
+	lantern.Color = Color3.fromRGB(255, 200, 100)
+	lantern.Material = Enum.Material.Neon
+	lantern.Parent = model
+	local lampLight = Instance.new("PointLight")
+	lampLight.Range = 20; lampLight.Brightness = 2; lampLight.Color = Color3.fromRGB(255, 200, 120)
+	lampLight.Parent = lantern
+
+	local interiorLight = Instance.new("PointLight")
+	interiorLight.Range = 28; interiorLight.Brightness = 1.5
+	interiorLight.Color = Color3.fromRGB(255, 200, 120)
+	interiorLight.Parent = base
 
 	model.PrimaryPart = base
 end
@@ -192,41 +251,87 @@ local function buildCamp(pos: Vector3, parent: Instance)
 	model.Name = "Camp"
 	model.Parent = parent
 
-	-- Fire pit
+	-- Stone ring around the fire pit.
+	for i = 0, 7 do
+		local angle = (i / 8) * math.pi * 2
+		local stone = Instance.new("Part")
+		stone.Anchored = true
+		stone.Shape = Enum.PartType.Ball
+		stone.Size = Vector3.new(1.4, 1.4, 1.4)
+		stone.Position = pos + Vector3.new(math.cos(angle) * 3, 0.7, math.sin(angle) * 3)
+		stone.Color = Color3.fromRGB(110, 100, 95)
+		stone.Material = Enum.Material.Slate
+		stone.Parent = model
+	end
+
+	-- Logs on the fire.
+	for _, ang in ipairs({ 30, -30 }) do
+		local log = Instance.new("Part")
+		log.Anchored = true; log.Shape = Enum.PartType.Cylinder
+		log.Size = Vector3.new(3, 0.8, 0.8)
+		log.CFrame = CFrame.new(pos + Vector3.new(0, 1.0, 0))
+			* CFrame.Angles(0, math.rad(ang), 0)
+		log.Color = Color3.fromRGB(80, 50, 30); log.Material = Enum.Material.Wood
+		log.Parent = model
+	end
+
+	-- Fire on top.
 	local pit = Instance.new("Part")
 	pit.Shape = Enum.PartType.Cylinder
 	pit.Anchored = true
-	pit.Size = Vector3.new(1, 5, 5)
-	pit.CFrame = CFrame.new(pos + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	pit.Color = Color3.fromRGB(40, 30, 25)
-	pit.Material = Enum.Material.Slate
+	pit.Size = Vector3.new(0.4, 5, 5)
+	pit.CFrame = CFrame.new(pos + Vector3.new(0, 1.4, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pit.Color = Color3.fromRGB(60, 40, 30); pit.Material = Enum.Material.Slate
+	pit.Transparency = 0.7
 	pit.Parent = model
 
 	local fire = Instance.new("Fire")
-	fire.Size = 8
-	fire.Heat = 12
+	fire.Size = 10; fire.Heat = 14
 	fire.Parent = pit
+	local fireGlow = Instance.new("PointLight")
+	fireGlow.Range = 22; fireGlow.Brightness = 2.2
+	fireGlow.Color = Color3.fromRGB(255, 160, 80)
+	fireGlow.Parent = pit
+
+	-- Three logs to sit on around the perimeter.
+	for i = 1, 3 do
+		local angle = (i / 3) * math.pi * 2
+		local log = Instance.new("Part")
+		log.Anchored = true; log.Shape = Enum.PartType.Cylinder
+		log.Size = Vector3.new(5, 1.2, 1.2)
+		log.CFrame = CFrame.new(pos + Vector3.new(math.cos(angle) * 6, 0.6, math.sin(angle) * 6))
+			* CFrame.Angles(0, angle + math.pi / 2, 0)
+		log.Color = Color3.fromRGB(95, 65, 40); log.Material = Enum.Material.Wood
+		log.Parent = model
+	end
 
 	-- Two tents flanking the pit.
 	for i = 1, 2 do
 		local tent = Instance.new("WedgePart")
 		tent.Anchored = true
 		tent.Size = Vector3.new(8, 5, 6)
-		local offset = Vector3.new(if i == 1 then -7 else 7, 2.5, 4)
+		local offset = Vector3.new(if i == 1 then -10 else 10, 2.5, 4)
 		tent.CFrame = CFrame.new(pos + offset) * CFrame.Angles(0, math.rad(if i == 1 then 90 else -90), 0)
 		tent.Color = Color3.fromRGB(150, 120, 80)
 		tent.Material = Enum.Material.Fabric
 		tent.Parent = model
+
+		-- Tent pole front.
+		local pole = Instance.new("Part")
+		pole.Anchored = true
+		pole.Size = Vector3.new(0.3, 5, 0.3)
+		pole.Position = tent.Position + Vector3.new(0, 0, -2.5)
+		pole.Color = Color3.fromRGB(80, 50, 30); pole.Material = Enum.Material.Wood
+		pole.Parent = model
 	end
 
-	-- Small crate (lootable hook; CombatHandler's pickup system looks for this name).
+	-- Small crate (lootable hook).
 	local crate = Instance.new("Part")
 	crate.Name = "LootCrate"
 	crate.Anchored = true
 	crate.Size = Vector3.new(3, 3, 3)
-	crate.CFrame = CFrame.new(pos + Vector3.new(6, 1.5, -4))
-	crate.Color = Color3.fromRGB(100, 70, 40)
-	crate.Material = Enum.Material.WoodPlanks
+	crate.CFrame = CFrame.new(pos + Vector3.new(8, 1.5, -4))
+	crate.Color = Color3.fromRGB(100, 70, 40); crate.Material = Enum.Material.WoodPlanks
 	crate.Parent = model
 end
 
@@ -261,6 +366,45 @@ local function buildCave(pos: Vector3, parent: Instance)
 	portal.Material = Enum.Material.SmoothPlastic
 	portal.Transparency = 0.1
 	portal.Parent = model
+
+	-- Glowing crystals scattered around the portal — mire-tinged purple.
+	local crystalColors = {
+		Color3.fromRGB(120, 80, 220),
+		Color3.fromRGB(80, 200, 220),
+		Color3.fromRGB(220, 100, 180),
+	}
+	for i = 1, 6 do
+		local crystal = Instance.new("Part")
+		crystal.Anchored = true
+		crystal.Size = Vector3.new(rng:NextNumber(0.6, 1.4), rng:NextNumber(2, 4), rng:NextNumber(0.6, 1.4))
+		local a = (i / 6) * math.pi * 2
+		crystal.CFrame = CFrame.new(pos + Vector3.new(math.cos(a) * 8, 1.5, math.sin(a) * 8))
+			* CFrame.Angles(math.rad(rng:NextNumber(-15, 15)), 0, math.rad(rng:NextNumber(-15, 15)))
+		crystal.Color = crystalColors[((i - 1) % #crystalColors) + 1]
+		crystal.Material = Enum.Material.Neon
+		crystal.Transparency = 0.15
+		crystal.Parent = model
+
+		local glow = Instance.new("PointLight")
+		glow.Range = 10
+		glow.Brightness = 1.4
+		glow.Color = crystal.Color
+		glow.Parent = crystal
+	end
+
+	-- Eerie cold mist drifting from the portal.
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(Color3.fromRGB(180, 180, 220))
+	mist.Rate = 6
+	mist.Lifetime = NumberRange.new(2, 4)
+	mist.Speed = NumberRange.new(1, 2)
+	mist.Size = NumberSequence.new(3)
+	mist.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	mist.Parent = portal
 
 	table.insert(WorldState.CavePortals, portal.Position)
 end

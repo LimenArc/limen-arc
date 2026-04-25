@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -34,6 +35,13 @@ frame.BackgroundColor3 = Color3.fromRGB(20, 22, 36)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame, function()
+	-- The server's TradeCancel handler is a no-op when there's no session,
+	-- so we can fire it unconditionally to keep this closure simple.
+	Remotes.Events.TradeCancel:FireServer()
+	screen.Enabled = false
+end)
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)

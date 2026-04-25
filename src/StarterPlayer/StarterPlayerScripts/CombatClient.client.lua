@@ -75,6 +75,17 @@ local function attemptThrow(target: Model?)
 	if t then Remotes.Events.ThrowTrap:FireServer(selectedTrapId, t) end
 end
 
+-- "Trap aim mode" — when ON, the next tap on a monster throws the selected
+-- trap instead of attacking. The mode auto-disengages after one throw, or
+-- stays on if `trapModeSticky` is true (set by the action bar's long press).
+local trapMode = false
+local trapModeSticky = false
+
+local function setTrapMode(on: boolean, sticky: boolean?)
+	trapMode = on
+	trapModeSticky = sticky == true
+end
+
 -- ── Input: handles mouse click AND touch tap ─────────────────────────────
 -- We ignore taps that landed on GUI (processed = true).
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -86,11 +97,19 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		local pos = input.Position  -- Vector3 on touch, Vector2-ish on mouse
 		local target = monsterUnderScreenPoint(pos.X, pos.Y)
 		if target then
-			attemptAttack(target)
+			if trapMode then
+				attemptThrow(target)
+				if not trapModeSticky then trapMode = false end
+			else
+				attemptAttack(target)
+			end
 		end
 	elseif input.KeyCode == Enum.KeyCode.F then
 		local loc = UserInputService:GetMouseLocation()
 		attemptThrow(monsterUnderScreenPoint(loc.X, loc.Y))
+	elseif input.KeyCode == Enum.KeyCode.G then
+		-- Toggle "trap aim mode" — next click throws.
+		setTrapMode(not trapMode, true)
 	elseif input.KeyCode == Enum.KeyCode.One then selectedTrapId = "trap_basic"
 	elseif input.KeyCode == Enum.KeyCode.Two then selectedTrapId = "trap_strong"
 	elseif input.KeyCode == Enum.KeyCode.Three then selectedTrapId = "trap_shock"
@@ -105,5 +124,7 @@ _G.Combat = {
 	SetTrap = function(id: string) selectedTrapId = id end,
 	Attack = attemptAttack,
 	Throw = attemptThrow,
+	SetTrapMode = setTrapMode,
+	IsTrapMode = function() return trapMode end,
 }
 _G.SelectedTrap = function() return selectedTrapId end

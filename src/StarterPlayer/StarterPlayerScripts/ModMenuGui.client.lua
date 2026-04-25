@@ -12,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local GameConfig = require(Modules:WaitForChild("GameConfig"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -37,6 +38,8 @@ frame.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
 frame.BorderSizePixel = 0
 frame.Parent = screen
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local stroke = Instance.new("UIStroke")
 stroke.Color = Color3.fromRGB(210, 180, 90)

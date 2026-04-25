@@ -106,12 +106,68 @@ trapBtn.MouseButton1Click:Connect(function()
 	refreshTrapLabel()
 end)
 
+-- CATCH button:
+--   · short tap          → immediate throw at the nearest monster
+--   · long press (>0.5s) → enter "trap aim mode": next tap on a monster
+--                          throws the trap. Tap CATCH again to exit.
+local pressStart = 0
+local trapModeOn = false
+
+local function setTrapModeBtn(on: boolean)
+	trapModeOn = on
+	if _G.Combat then _G.Combat.SetTrapMode(on, on) end
+	catchBtn.BackgroundColor3 = on
+		and Color3.fromRGB(220, 130, 60)
+		or Color3.fromRGB(130, 200, 220)
+	catchBtn.Text = on and "AIM\nTRAP" or "CATCH"
+end
+
+catchBtn.MouseButton1Down:Connect(function() pressStart = os.clock() end)
+catchBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		pressStart = os.clock()
+	end
+end)
+
 catchBtn.MouseButton1Click:Connect(function()
-	if _G.Combat then _G.Combat.Throw(nil) end
+	if trapModeOn then
+		setTrapModeBtn(false)
+		return
+	end
+	if pressStart > 0 and os.clock() - pressStart > 0.5 then
+		setTrapModeBtn(true)
+	else
+		if _G.Combat then _G.Combat.Throw(nil) end
+	end
+	pressStart = 0
 end)
 
 attackBtn.MouseButton1Click:Connect(function()
+	if trapModeOn then setTrapModeBtn(false) end
 	if _G.Combat then _G.Combat.Attack(nil) end
+end)
+
+-- Banner shown across the top of the screen when aim mode is on.
+local banner = Instance.new("TextLabel")
+banner.AnchorPoint = Vector2.new(0.5, 0)
+banner.Position = UDim2.new(0.5, 0, 0, 80)
+banner.Size = UDim2.fromOffset(280, 32)
+banner.BackgroundColor3 = Color3.fromRGB(220, 130, 60)
+banner.BackgroundTransparency = 0.1
+banner.BorderSizePixel = 0
+banner.Font = Enum.Font.GothamBold
+banner.TextSize = 14
+banner.TextColor3 = Color3.fromRGB(30, 20, 10)
+banner.Text = "Tap a monster to throw the trap"
+banner.Visible = false
+banner.Parent = screen
+Instance.new("UICorner", banner).CornerRadius = UDim.new(0, 8)
+
+task.spawn(function()
+	while true do
+		task.wait(0.15)
+		banner.Visible = trapModeOn
+	end
 end)
 
 -- Hide the bar on large-screen PCs so it doesn't clutter. Heuristic: if
