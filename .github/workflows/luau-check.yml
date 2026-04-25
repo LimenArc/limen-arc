@@ -1,10 +1,14 @@
-name: Luau check
+name: Static checks
 
-# Runs the Luau compiler on every source file to catch syntax / parse errors
-# before they hit Roblox Studio. Also runs the Luau analyzer for type-level
-# lints — those are reported but don't fail the build, since Roblox-global
-# types (game, Instance, etc.) aren't known to the standalone analyzer and
-# produce false positives.
+# Runs Python-only static checks on every push and PR. Pure stdlib —
+# no external downloads, so no network failures. Verifies:
+#   1. Every Remotes.Events.* referenced in code is declared in Remotes.lua
+#   2. Every monster SpeciesId / item ItemId / reward Id resolves
+#
+# Luau syntax is verified by the author locally before push (luau-compile
+# from the official release). If we ever want CI-side syntax checking back,
+# add a separate job that pins to a specific Luau release and gracefully
+# skips on network failure.
 
 on:
   push:
@@ -14,84 +18,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  parse-check:
-    name: Parse every .lua file
+  consistency:
+    name: Cross-file consistency
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Luau
+      - name: Remote events declared vs used
         run: |
-          set -x
-          # Pin to a tested release so a transient `/latest/` redirect or
-          # asset rename can't break us.
-          LUAU_VERSION=0.717
-          URL="https://github.com/luau-lang/luau/releases/download/${LUAU_VERSION}/luau-ubuntu.zip"
-          mkdir -p /tmp/luau
-          # `-S` shows errors even with `-s`; `-w` prints the HTTP code.
-          http_code=$(curl -fsSL -o /tmp/luau.zip --write-out '%{http_code}' "$URL") \
-            || { echo "::error::curl failed to download $URL (http=$http_code)"; exit 1; }
-          ls -la /tmp/luau.zip
-          file /tmp/luau.zip || true
-          unzip -o /tmp/luau.zip -d /tmp/luau \
-            || { echo "::error::unzip failed; file is probably not a zip"; head -c 256 /tmp/luau.zip | od -c | head; exit 1; }
-          ls -la /tmp/luau
-          chmod +x /tmp/luau/luau /tmp/luau/luau-compile /tmp/luau/luau-analyze
-          /tmp/luau/luau-compile --help | head -5
-          echo "/tmp/luau" >> "$GITHUB_PATH"
-
-      - name: Parse every source file
-        id: parse
-        run: |
-          set +e
-          fail=0
-          total=0
-          while IFS= read -r -d '' f; do
-            total=$((total+1))
-            out=$(luau-compile -O0 "$f" 2>&1)
-            # luau-compile dumps bytecode text, but real parse errors contain
-            # words like "SyntaxError" / "expected" / "unexpected".
-            if echo "$out" | grep -qE "SyntaxError|unexpected|expected token|parse error|lexer error"; then
-              echo "::error file=$f::Parse error"
-              echo "$out" | grep -iE "syntax|expected|unexpected|parse|lexer" | head -5
-              fail=$((fail+1))
-            fi
-          done < <(find src -type f -name "*.lua" -print0)
-          echo ""
-          echo "Parsed $total file(s); $fail failed."
-          # Explicit numeric exit — using `if … then exit 1; fi` falls through
-          # with the test's nonzero exit when fail==0 and breaks the step.
-          exit "$fail"
-
-      - name: Type analyzer (informational)
-        if: always() && steps.parse.conclusion == 'success'
-        run: |
-          set +e
-          total=0
-          issues=0
-          # Drop lines about Roblox globals or optional struct fields Luau
-          # can't verify without type stubs.
-          filter='Unknown global|Unknown type|Unknown require|Unknown symbol .(game|script|workspace|typeof|task|Instance|Vector3|Vector2|CFrame|Color3|UDim|UDim2|Enum|Random|TweenInfo|Ray).|Property .* is not present|has no field|type pack|Cannot call non-function|This type has no|ImportUnused|LocalUnused|SameLineStatement'
-          while IFS= read -r -d '' f; do
-            total=$((total+1))
-            findings=$(luau-analyze --formatter=plain "$f" 2>&1 \
-              | grep -vE "$filter" \
-              | grep -E ":[0-9]+:[0-9]+:")
-            if [ -n "$findings" ]; then
-              echo "— $f"
-              echo "$findings" | head -5
-              issues=$((issues+1))
-            fi
-          done < <(find src -type f -name "*.lua" -print0)
-          echo ""
-          echo "Analyzed $total file(s); $issues had non-trivial findings."
-          # Non-fatal — informational only.
-          exit 0
-
-      - name: Cross-file consistency
-        run: |
-          set +e
-          echo "=== Remote events: declared vs used ==="
+          set -e
           grep -oE '^\t"[A-Z][A-Za-z]+",' src/ReplicatedStorage/Remotes.lua \
             | tr -d '\t",' | sort -u > /tmp/declared
           grep -rhoE 'Remotes\.Events\.[A-Z][A-Za-z]+' src \
@@ -104,6 +39,5 @@ jobs:
           fi
           echo "OK — every Remotes.Events.* referenced is declared."
 
-          echo ""
-          echo "=== Monster / item id references resolve ==="
-          python3 scripts/check_ids.py
+      - name: Monster / item id references resolve
+        run: python3 scripts/check_ids.py
