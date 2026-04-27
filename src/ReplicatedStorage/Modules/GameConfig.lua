@@ -19,9 +19,9 @@ export type MechanicsConfig = {
 local GameConfig = {}
 
 -- Empty = everyone can use mod menu (dev mode). Add UserIds before shipping.
-GameConfig.ModMenuAllowedUserIds: { [number]: boolean } = {}
+GameConfig.ModMenuAllowedUserIds = {} :: { [number]: boolean }
 
-GameConfig.DefaultMechanics: MechanicsConfig = {
+GameConfig.DefaultMechanics = {
 	Gravity              = 196.2,
 	MaxHP                = 500,
 	DamageMultiplier     = 1.0,
@@ -43,7 +43,7 @@ GameConfig.DefaultMapName     = "Flat Arena"
 -- Numeric min/max per mechanic key (used by ModMenuHandler for validation).
 type NumRange = { min: number, max: number }
 type StrOpts  = { options: { string } }
-GameConfig.MechanicsRanges: { [string]: NumRange | StrOpts } = {
+GameConfig.MechanicsRanges = {
 	Gravity              = { min = 10,   max = 1000  },
 	MaxHP                = { min = 50,   max = 10000 },
 	DamageMultiplier     = { min = 0.1,  max = 50    },
