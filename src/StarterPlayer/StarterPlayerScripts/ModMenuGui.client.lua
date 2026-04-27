@@ -1,497 +1,658 @@
 --!strict
--- The mod menu. Press M to toggle.
--- Every control fires ModMenuSetFlag; the server validates and applies.
--- The spawn-monster dropdown + teleport destinations are separate remotes.
+-- Valiant Sky Mod Menu — 3 tabs: Mechanics, Moveset Manager, Map Manager.
+-- Toggle with M key. Server validates all changes.
 
-local Players = game:GetService("Players")
+local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local UserInputService  = game:GetService("UserInputService")
+local HttpService        = game:GetService("HttpService")
 
-local Modules = ReplicatedStorage:WaitForChild("Modules")
-local GameConfig = require(Modules:WaitForChild("GameConfig"))
-local MonsterData = require(Modules:WaitForChild("MonsterData"))
-local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
+local GameConfig    = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("GameConfig"))
+local JSONValidator = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("JSONValidator"))
+local Remotes       = require(ReplicatedStorage:WaitForChild("Remotes"))
 
-local player = Players.LocalPlayer
+local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local state
-task.spawn(function()
-	local ok, data = pcall(function() return Remotes.Functions.GetModMenuState:InvokeServer() end)
-	if ok then state = data end
-end)
+-- ── Server state ──────────────────────────────────────────────────────────────
 
-local screen = Instance.new("ScreenGui")
-screen.Name = "ModMenuGui"
-screen.ResetOnSpawn = false
-screen.Enabled = false
-screen.Parent = playerGui
+type ServerState = {
+	Allowed:       boolean,
+	Mechanics:     any,
+	MovesetList:   { { name: string, isBuiltin: boolean } },
+	MapList:       { { name: string, isBuiltin: boolean } },
+	PlayerMoveset: string,
+	CurrentMap:    string,
+}
 
-local frame = Instance.new("Frame")
-frame.AnchorPoint = Vector2.new(0.5, 0.5)
-frame.Position = UDim2.fromScale(0.5, 0.5)
-frame.Size = UDim2.fromOffset(520, 580)
-frame.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
-frame.BorderSizePixel = 0
-frame.Parent = screen
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+local serverState: ServerState? = nil
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(210, 180, 90)
-stroke.Thickness = 1.5
-stroke.Parent = frame
+local function refreshState()
+	local ok, data = pcall(function()
+		return Remotes.Functions.GetModMenuState:InvokeServer()
+	end)
+	if ok and data then
+		serverState = data :: ServerState
+	end
+end
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundTransparency = 1
-title.Text = "· MOD MENU ·"
-title.Font = Enum.Font.FredokaOne
-title.TextSize = 24
-title.TextColor3 = Color3.fromRGB(240, 220, 160)
-title.Parent = frame
+task.spawn(refreshState)
 
-local scroll = Instance.new("ScrollingFrame")
-scroll.Position = UDim2.new(0, 14, 0, 48)
-scroll.Size = UDim2.new(1, -28, 1, -62)
-scroll.BackgroundTransparency = 1
-scroll.BorderSizePixel = 0
-scroll.ScrollBarThickness = 4
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.Parent = frame
+-- ── UI helpers ────────────────────────────────────────────────────────────────
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 6)
-layout.Parent = scroll
+local COL_BG     = Color3.fromRGB(14, 18, 28)
+local COL_PANEL  = Color3.fromRGB(22, 26, 40)
+local COL_ROW    = Color3.fromRGB(30, 35, 52)
+local COL_ACCENT = Color3.fromRGB(100, 120, 220)
+local COL_GREEN  = Color3.fromRGB(80, 200, 100)
+local COL_RED    = Color3.fromRGB(220, 80, 80)
+local COL_TEXT   = Color3.fromRGB(220, 220, 240)
+local COL_DIM    = Color3.fromRGB(140, 140, 165)
 
--- Local mirror of server flags so toggles update instantly.
-local flags = {}
-for k, v in pairs(GameConfig.ModMenuDefaults) do flags[k] = v end
+local function corner(inst: Instance, r: number)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r)
+	c.Parent = inst
+end
 
-local function row(): Frame
+local function makeFrame(parent: Instance, size: UDim2, pos: UDim2, color: Color3): Frame
 	local f = Instance.new("Frame")
-	f.Size = UDim2.new(1, 0, 0, 40)
-	f.BackgroundColor3 = Color3.fromRGB(24, 28, 42)
+	f.Size = size
+	f.Position = pos
+	f.BackgroundColor3 = color
 	f.BorderSizePixel = 0
-	f.Parent = scroll
-	Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+	f.Parent = parent
 	return f
 end
 
-local function addLabel(parent: Instance, text: string, width: UDim2)
+local function makeLabel(parent: Instance, text: string, size: UDim2, pos: UDim2,
+	fontSize: number, color: Color3?, align: Enum.TextXAlignment?): TextLabel
 	local l = Instance.new("TextLabel")
-	l.Size = width
-	l.Position = UDim2.fromOffset(12, 0)
-	l.BackgroundTransparency = 1
-	l.TextXAlignment = Enum.TextXAlignment.Left
 	l.Text = text
-	l.Font = Enum.Font.Gotham
-	l.TextSize = 14
-	l.TextColor3 = Color3.fromRGB(230, 230, 240)
+	l.Size = size
+	l.Position = pos
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamBold
+	l.TextSize = fontSize
+	l.TextColor3 = color or COL_TEXT
+	l.TextXAlignment = align or Enum.TextXAlignment.Left
 	l.Parent = parent
 	return l
 end
 
-local function setFlag(flag: string, value: any)
-	flags[flag] = value
-	Remotes.Events.ModMenuSetFlag:FireServer(flag, value)
+local function makeButton(parent: Instance, text: string, size: UDim2, pos: UDim2,
+	color: Color3): TextButton
+	local b = Instance.new("TextButton")
+	b.Text = text
+	b.Size = size
+	b.Position = pos
+	b.BackgroundColor3 = color
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 13
+	b.TextColor3 = COL_TEXT
+	b.AutoButtonColor = true
+	corner(b, 6)
+	b.Parent = parent
+	return b
 end
 
-local function addToggleRow(flag: string, label: string)
-	local f = row()
-	addLabel(f, label, UDim2.new(1, -90, 1, 0))
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.fromOffset(70, 26)
-	btn.Position = UDim2.new(1, -82, 0.5, -13)
-	btn.BorderSizePixel = 0
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 13
-	btn.Parent = f
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+-- ── Main window ───────────────────────────────────────────────────────────────
 
-	local function redraw()
-		local on = flags[flag]
-		btn.BackgroundColor3 = if on then Color3.fromRGB(80, 140, 90) else Color3.fromRGB(80, 60, 70)
-		btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-		btn.Text = if on then "ON" else "OFF"
-	end
-	redraw()
-	btn.MouseButton1Click:Connect(function()
-		setFlag(flag, not flags[flag]); redraw()
-	end)
+local screen = Instance.new("ScreenGui")
+screen.Name          = "ModMenuGui"
+screen.ResetOnSpawn  = false
+screen.Enabled       = false
+screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screen.Parent        = playerGui
+
+local window = makeFrame(screen, UDim2.fromOffset(600, 640),
+	UDim2.new(0.5, -300, 0.5, -320), COL_BG)
+corner(window, 12)
+
+makeLabel(window, "⚔  VALIANT SKY — MOD MENU  ⚔",
+	UDim2.new(1, 0, 0, 36), UDim2.fromOffset(0, 0),
+	16, COL_TEXT, Enum.TextXAlignment.Center)
+
+-- ── Tab bar ───────────────────────────────────────────────────────────────────
+
+local TAB_NAMES = { "Mechanics", "Movesets", "Maps" }
+local tabBar    = makeFrame(window, UDim2.new(1, 0, 0, 36), UDim2.fromOffset(0, 36), COL_PANEL)
+local tabButtons: { TextButton } = {}
+
+local contentArea = makeFrame(window,
+	UDim2.new(1, -16, 1, -88),
+	UDim2.fromOffset(8, 80), COL_PANEL)
+corner(contentArea, 8)
+
+local activeTab = ""
+
+-- ── Tab content frames ────────────────────────────────────────────────────────
+
+local function makeTabContent(): Frame
+	local f = makeFrame(contentArea, UDim2.fromScale(1, 1), UDim2.fromOffset(0, 0), COL_PANEL)
+	f.Visible = false
+	f.ClipsDescendants = true
+	corner(f, 8)
+	return f
 end
 
-local function addSliderRow(flag: string, label: string, minV: number, maxV: number, step: number)
-	local f = row()
-	f.Size = UDim2.new(1, 0, 0, 48)
-	local title = addLabel(f, ("%s: %s"):format(label, tostring(flags[flag] or minV)), UDim2.new(1, -20, 0, 20))
-	title.Position = UDim2.fromOffset(12, 4)
+local mechContent    = makeTabContent()
+local movesetContent = makeTabContent()
+local mapContent     = makeTabContent()
 
-	local bar = Instance.new("Frame")
-	bar.Position = UDim2.new(0, 12, 0, 30)
-	bar.Size = UDim2.new(1, -24, 0, 8)
-	bar.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
-	bar.BorderSizePixel = 0
-	bar.Parent = f
-	Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 4)
+local tabContents: { [string]: Frame } = {
+	Mechanics = mechContent,
+	Movesets  = movesetContent,
+	Maps      = mapContent,
+}
 
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.new(0, 0, 1, 0)
-	fill.BackgroundColor3 = Color3.fromRGB(210, 180, 90)
-	fill.BorderSizePixel = 0
-	fill.Parent = bar
-	Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
-
-	local function setFromMouse(x: number)
-		local absPos = bar.AbsolutePosition.X
-		local absSize = bar.AbsoluteSize.X
-		local frac = math.clamp((x - absPos) / math.max(1, absSize), 0, 1)
-		local raw = minV + (maxV - minV) * frac
-		local snapped = math.floor(raw / step + 0.5) * step
-		snapped = math.clamp(snapped, minV, maxV)
-		flags[flag] = snapped
-		title.Text = ("%s: %s"):format(label, tostring(snapped))
-		fill.Size = UDim2.new(frac, 0, 1, 0)
-		setFlag(flag, snapped)
+local function selectTab(name: string)
+	activeTab = name
+	for _, n in ipairs(TAB_NAMES) do
+		tabContents[n].Visible = (n == name)
 	end
-
-	local button = Instance.new("TextButton")
-	button.BackgroundTransparency = 1
-	button.Text = ""
-	button.Size = UDim2.new(1, 0, 1, 0)
-	button.Parent = bar
-	button.MouseButton1Down:Connect(function()
-		local dragging = true
-		setFromMouse(UserInputService:GetMouseLocation().X)
-		local move; local up
-		move = UserInputService.InputChanged:Connect(function(input)
-			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-				setFromMouse(input.Position.X)
-			end
-		end)
-		up = UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 then
-				dragging = false; move:Disconnect(); up:Disconnect()
-			end
-		end)
-	end)
-
-	-- initial fill
-	local init = flags[flag] or minV
-	local frac = (init - minV) / math.max(1, maxV - minV)
-	fill.Size = UDim2.new(frac, 0, 1, 0)
-end
-
-local function addChoiceRow(flag: string, label: string, choices: { string })
-	local f = row()
-	f.Size = UDim2.new(1, 0, 0, 50)
-	addLabel(f, label, UDim2.new(1, -20, 0, 20))
-
-	local holder = Instance.new("Frame")
-	holder.Position = UDim2.new(0, 12, 0, 24)
-	holder.Size = UDim2.new(1, -24, 0, 22)
-	holder.BackgroundTransparency = 1
-	holder.Parent = f
-
-	local h = Instance.new("UIListLayout")
-	h.FillDirection = Enum.FillDirection.Horizontal
-	h.Padding = UDim.new(0, 4)
-	h.Parent = holder
-
-	local buttons: { TextButton } = {}
-	local function redraw()
-		for i, btn in ipairs(buttons) do
-			btn.BackgroundColor3 = if flags[flag] == choices[i]
-				then Color3.fromRGB(210, 180, 90) else Color3.fromRGB(50, 55, 75)
-		end
-	end
-	for i, choice in ipairs(choices) do
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.fromOffset(86, 22)
-		btn.Text = choice
-		btn.BorderSizePixel = 0
-		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 12
-		btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-		btn.Parent = holder
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-		btn.MouseButton1Click:Connect(function()
-			flags[flag] = choice; setFlag(flag, choice); redraw()
-		end)
-		buttons[i] = btn
-	end
-	redraw()
-end
-
--- Build all rows in the order shown in the README.
-addToggleRow("GodMode",         "God mode")
-addToggleRow("InfiniteStamina", "Infinite stamina")
-addSliderRow("SpeedMultiplier", "Speed multiplier",  1, 8, 1)
-addSliderRow("JumpMultiplier",  "Jump multiplier",   1, 4, 1)
-addToggleRow("NoClip",          "No-clip")
-addToggleRow("InfiniteMoney",   "Infinite money (top-up)")
-addToggleRow("InstantCapture",  "Instant capture")
-addToggleRow("AutoCatch",       "Auto-catch nearby monster")
-addSliderRow("DamageMultiplier","Damage multiplier", 1, 20, 1)
-addToggleRow("EspMonsters",     "ESP — monsters")
-addToggleRow("EspLoot",         "ESP — loot crates")
-addToggleRow("XrayCaves",       "X-ray caves")
-addToggleRow("InstantLevelUp",  "Instant level up catches")
-addChoiceRow("Weather",         "Weather",     { "Clear", "Rain", "Storm", "Snow" })
-addSliderRow("ClockTime",       "Time of day", 0, 24, 1)
-addSliderRow("TimeScale",       "Gravity scale (world speed)", 1, 10, 1)
-
--- Spawn-monster dropdown + teleport buttons at the bottom.
-local spawnRow = row()
-spawnRow.Size = UDim2.new(1, 0, 0, 56)
-addLabel(spawnRow, "Spawn monster", UDim2.new(0, 140, 1, 0))
-
-local speciesBtn = Instance.new("TextButton")
-speciesBtn.Position = UDim2.new(0, 150, 0, 14)
-speciesBtn.Size = UDim2.fromOffset(210, 28)
-speciesBtn.Text = "Emberpup ▾"
-speciesBtn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
-speciesBtn.BorderSizePixel = 0
-speciesBtn.Font = Enum.Font.Gotham
-speciesBtn.TextSize = 13
-speciesBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
-speciesBtn.Parent = spawnRow
-Instance.new("UICorner", speciesBtn).CornerRadius = UDim.new(0, 4)
-
-local goBtn = Instance.new("TextButton")
-goBtn.Position = UDim2.new(1, -86, 0, 14)
-goBtn.Size = UDim2.fromOffset(72, 28)
-goBtn.Text = "Spawn"
-goBtn.BackgroundColor3 = Color3.fromRGB(210, 180, 90)
-goBtn.TextColor3 = Color3.fromRGB(30, 30, 30)
-goBtn.Font = Enum.Font.GothamBold
-goBtn.TextSize = 13
-goBtn.BorderSizePixel = 0
-goBtn.Parent = spawnRow
-Instance.new("UICorner", goBtn).CornerRadius = UDim.new(0, 4)
-
-local selectedSpecies = "emberpup"
-local dropdown: Frame?
-speciesBtn.MouseButton1Click:Connect(function()
-	if dropdown then dropdown:Destroy(); dropdown = nil; return end
-	local d = Instance.new("ScrollingFrame")
-	d.Position = UDim2.new(0, 150, 0, 44)
-	d.Size = UDim2.fromOffset(210, 180)
-	d.BackgroundColor3 = Color3.fromRGB(18, 22, 34)
-	d.BorderSizePixel = 0
-	d.CanvasSize = UDim2.new(0, 0, 0, 0)
-	d.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	d.ScrollBarThickness = 3
-	d.Parent = spawnRow
-	Instance.new("UICorner", d).CornerRadius = UDim.new(0, 4)
-	local l = Instance.new("UIListLayout"); l.Parent = d
-	for _, def in ipairs(MonsterData.All) do
-		local opt = Instance.new("TextButton")
-		opt.Size = UDim2.new(1, 0, 0, 22)
-		opt.Text = ("%s  [%s]"):format(def.DisplayName, def.Rarity)
-		opt.TextXAlignment = Enum.TextXAlignment.Left
-		opt.Font = Enum.Font.Gotham
-		opt.TextSize = 12
-		opt.BackgroundColor3 = Color3.fromRGB(26, 30, 44)
-		opt.TextColor3 = Color3.fromRGB(220, 220, 230)
-		opt.BorderSizePixel = 0
-		opt.Parent = d
-		opt.MouseButton1Click:Connect(function()
-			selectedSpecies = def.Id
-			speciesBtn.Text = def.DisplayName .. " ▾"
-			d:Destroy(); dropdown = nil
-		end)
-	end
-	dropdown = d
-end)
-
-goBtn.MouseButton1Click:Connect(function()
-	Remotes.Events.ModMenuSpawnMonster:FireServer(selectedSpecies)
-end)
-
--- Teleport waypoints.
-local teleRow = row()
-teleRow.Size = UDim2.new(1, 0, 0, 50)
-addLabel(teleRow, "Teleport", UDim2.new(0, 80, 1, 0))
-
-local teleHolder = Instance.new("Frame")
-teleHolder.Position = UDim2.new(0, 90, 0, 14)
-teleHolder.Size = UDim2.new(1, -100, 0, 22)
-teleHolder.BackgroundTransparency = 1
-teleHolder.Parent = teleRow
-local teleLayout = Instance.new("UIListLayout")
-teleLayout.FillDirection = Enum.FillDirection.Horizontal
-teleLayout.Padding = UDim.new(0, 4)
-teleLayout.Parent = teleHolder
-
-local function teleButton(name: string, getPos: () -> Vector3?)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.fromOffset(100, 22)
-	btn.Text = name
-	btn.BackgroundColor3 = Color3.fromRGB(50, 55, 75)
-	btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-	btn.Font = Enum.Font.Gotham
-	btn.TextSize = 12
-	btn.BorderSizePixel = 0
-	btn.Parent = teleHolder
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-	btn.MouseButton1Click:Connect(function()
-		local pos = getPos()
-		if pos then Remotes.Events.ModMenuTeleport:FireServer(pos) end
-	end)
-end
-
-teleButton("Market", function() return Vector3.new(0, 8, 30) end)
-teleButton("Nearest Cave", function()
-	local world = Workspace:FindFirstChild("World")
-	local caves = world and world:FindFirstChild("Caves")
-	if not caves then return nil end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not root then return nil end
-	local best, bestDist
-	for _, cave in ipairs(caves:GetChildren()) do
-		local portal = cave:FindFirstChild("CavePortal") :: BasePart?
-		if portal then
-			local d = (portal.Position - root.Position).Magnitude
-			if not bestDist or d < bestDist then best, bestDist = portal.Position, d end
-		end
-	end
-	return best
-end)
-teleButton("Random Cabin", function()
-	local world = Workspace:FindFirstChild("World")
-	local structs = world and world:FindFirstChild("Structures")
-	if not structs then return nil end
-	local cabins = {}
-	for _, inst in ipairs(structs:GetChildren()) do
-		if inst.Name == "Cabin" and inst:IsA("Model") and inst.PrimaryPart then
-			table.insert(cabins, inst.PrimaryPart.Position)
-		end
-	end
-	if #cabins == 0 then return nil end
-	return cabins[math.random(1, #cabins)]
-end)
-
--- ── ESP / X-ray / auto-catch heartbeat ───────────────────────────────────
--- Client-only overlays driven by the local flag mirror.
-local highlights: { [Instance]: Highlight } = {}
-local function ensureHighlight(inst: Instance, color: Color3)
-	local h = highlights[inst]
-	if h and h.Parent then return h end
-	h = Instance.new("Highlight")
-	h.Adornee = inst
-	h.FillTransparency = 0.6
-	h.FillColor = color
-	h.OutlineColor = color
-	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	h.Parent = inst
-	highlights[inst] = h
-	return h
-end
-local function clearHighlights()
-	for inst, h in pairs(highlights) do
-		if h then h:Destroy() end
-		highlights[inst] = nil
+	for i, btn in ipairs(tabButtons) do
+		btn.BackgroundColor3 = (TAB_NAMES[i] == name) and COL_ACCENT or COL_ROW
 	end
 end
 
-RunService.Heartbeat:Connect(function()
-	local world = Workspace:FindFirstChild("World")
-	if not world then return end
+for i, name in ipairs(TAB_NAMES) do
+	local w = 1 / #TAB_NAMES
+	local btn = makeButton(tabBar, name,
+		UDim2.new(w, -4, 1, -8),
+		UDim2.new((i - 1) * w, 2, 0, 4),
+		COL_ROW)
+	btn.TextSize = 14
+	btn.MouseButton1Click:Connect(function() selectTab(name) end)
+	table.insert(tabButtons, btn)
+end
 
-	if flags.EspMonsters then
-		local spawns = world:FindFirstChild("MonsterSpawns")
-		if spawns then
-			for _, mob in ipairs(spawns:GetChildren()) do
-				if mob:IsA("Model") then ensureHighlight(mob, Color3.fromRGB(220, 80, 80)) end
-			end
-		end
-	end
-	if flags.EspLoot then
-		for _, d in ipairs(world:GetDescendants()) do
-			if d.Name == "LootCrate" then ensureHighlight(d, Color3.fromRGB(240, 210, 120)) end
-		end
-	end
-	if flags.XrayCaves then
-		local caves = world:FindFirstChild("Caves")
-		if caves then
-			for _, cave in ipairs(caves:GetChildren()) do
-				ensureHighlight(cave, Color3.fromRGB(140, 180, 240))
-			end
-		end
-	end
-	if not (flags.EspMonsters or flags.EspLoot or flags.XrayCaves) then
-		clearHighlights()
-	end
+-- ── Toggle (M key) ────────────────────────────────────────────────────────────
 
-	if flags.AutoCatch then
-		local char = player.Character
-		local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if root then
-			local spawns = world:FindFirstChild("MonsterSpawns")
-			if spawns then
-				for _, mob in ipairs(spawns:GetChildren()) do
-					if mob:IsA("Model") and mob.PrimaryPart then
-						if (mob.PrimaryPart.Position - root.Position).Magnitude < 20 then
-							Remotes.Events.ThrowTrap:FireServer("trap_basic", mob)
-							break
-						end
-					end
-				end
-			end
-		end
-	end
-end)
-
--- ── On-screen toggle button + keyboard shortcut ──────────────────────────
-local toggleGui = Instance.new("ScreenGui")
-toggleGui.Name = "ModMenuToggle"
-toggleGui.ResetOnSpawn = false
-toggleGui.Parent = playerGui
-
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.AnchorPoint = Vector2.new(1, 0)
-toggleBtn.Position = UDim2.new(1, -16, 0, 16)
-toggleBtn.Size = UDim2.fromOffset(60, 60)
-toggleBtn.Text = "MOD"
-toggleBtn.Font = Enum.Font.FredokaOne
-toggleBtn.TextSize = 18
-toggleBtn.TextColor3 = Color3.fromRGB(30, 30, 30)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(210, 180, 90)
-toggleBtn.BorderSizePixel = 0
-toggleBtn.AutoButtonColor = true
-toggleBtn.Parent = toggleGui
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(1, 0)
-btnCorner.Parent = toggleBtn
-
-local btnStroke = Instance.new("UIStroke")
-btnStroke.Color = Color3.fromRGB(60, 40, 10)
-btnStroke.Thickness = 2
-btnStroke.Parent = toggleBtn
-
-local keyHint = Instance.new("TextLabel")
-keyHint.AnchorPoint = Vector2.new(0.5, 0)
-keyHint.Position = UDim2.new(0.5, 0, 1, 2)
-keyHint.Size = UDim2.fromOffset(60, 16)
-keyHint.BackgroundTransparency = 1
-keyHint.Text = "[M]"
-keyHint.Font = Enum.Font.Gotham
-keyHint.TextSize = 11
-keyHint.TextColor3 = Color3.fromRGB(230, 210, 170)
-keyHint.Parent = toggleBtn
-
-toggleBtn.MouseButton1Click:Connect(function()
-	screen.Enabled = not screen.Enabled
-end)
-
-UserInputService.InputBegan:Connect(function(input, processed)
+UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
 	if processed then return end
 	if input.KeyCode == Enum.KeyCode.M then
 		screen.Enabled = not screen.Enabled
+		if screen.Enabled then
+			task.spawn(refreshState)
+			if activeTab == "" then selectTab("Mechanics") end
+		end
 	end
 end)
+
+-- ── Mechanics tab ─────────────────────────────────────────────────────────────
+
+local mechScroll = Instance.new("ScrollingFrame")
+mechScroll.Size                = UDim2.fromScale(1, 1)
+mechScroll.Position            = UDim2.fromOffset(0, 0)
+mechScroll.BackgroundTransparency = 1
+mechScroll.BorderSizePixel     = 0
+mechScroll.ScrollBarThickness  = 6
+mechScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+mechScroll.CanvasSize          = UDim2.fromOffset(0, 0)
+mechScroll.Parent              = mechContent
+
+local mechLayout = Instance.new("UIListLayout")
+mechLayout.FillDirection  = Enum.FillDirection.Vertical
+mechLayout.SortOrder      = Enum.SortOrder.LayoutOrder
+mechLayout.Padding        = UDim.new(0, 4)
+mechLayout.Parent         = mechScroll
+
+local mechPad = Instance.new("UIPadding")
+mechPad.PaddingLeft   = UDim.new(0, 8)
+mechPad.PaddingRight  = UDim.new(0, 8)
+mechPad.PaddingTop    = UDim.new(0, 8)
+mechPad.Parent        = mechScroll
+
+local mechOrder = 0
+
+local function setMechanic(key: string, value: any)
+	Remotes.Events.ModMenuSetMechanic:FireServer(key, value)
+end
+
+local function addSliderRow(key: string, label: string, min: number, max: number, step: number)
+	mechOrder += 1
+	local row = makeFrame(mechScroll, UDim2.new(1, -8, 0, 44),
+		UDim2.fromOffset(0, 0), COL_ROW)
+	row.LayoutOrder = mechOrder
+	corner(row, 6)
+
+	local current = (serverState and (serverState.Mechanics :: any)[key]) or min
+	makeLabel(row, label, UDim2.new(0.45, 0, 0, 20), UDim2.fromOffset(8, 4), 12)
+
+	local valLabel = makeLabel(row, tostring(current),
+		UDim2.new(0.15, 0, 0, 20),
+		UDim2.new(0.45, 0, 0, 4), 12, COL_GREEN, Enum.TextXAlignment.Center)
+
+	local sliderBg = makeFrame(row, UDim2.new(0.38, -12, 0, 8),
+		UDim2.new(0.62, 0, 0, 18), Color3.fromRGB(50, 55, 75))
+	corner(sliderBg, 4)
+
+	local sliderFill = makeFrame(sliderBg, UDim2.new(0, 0, 1, 0),
+		UDim2.fromOffset(0, 0), COL_ACCENT)
+	corner(sliderFill, 4)
+
+	local minBtn = makeButton(row, "−", UDim2.fromOffset(22, 22),
+		UDim2.new(0.62, -34, 0, 11), Color3.fromRGB(60, 40, 40))
+	local maxBtn = makeButton(row, "+", UDim2.fromOffset(22, 22),
+		UDim2.new(1, -28, 0, 11), Color3.fromRGB(40, 60, 40))
+
+	local function snap(v: number): number
+		return math.clamp(math.round(v / step) * step, min, max)
+	end
+	local function updateFill(v: number)
+		sliderFill.Size = UDim2.new((v - min) / (max - min), 0, 1, 0)
+		local fmt = step < 1 and "%.2f" or "%g"
+		valLabel.Text = string.format(fmt, v)
+	end
+
+	local val = snap(current)
+	updateFill(val)
+
+	minBtn.MouseButton1Click:Connect(function()
+		val = snap(val - step)
+		updateFill(val)
+		setMechanic(key, val)
+	end)
+	maxBtn.MouseButton1Click:Connect(function()
+		val = snap(val + step)
+		updateFill(val)
+		setMechanic(key, val)
+	end)
+
+	-- Drag on slider
+	local dragging = false
+	sliderBg.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+	sliderBg.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local rel = (input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X
+			val = snap(min + rel * (max - min))
+			updateFill(val)
+			setMechanic(key, val)
+		end
+	end)
+end
+
+local function addChoiceRow(key: string, label: string, options: { string })
+	mechOrder += 1
+	local row = makeFrame(mechScroll, UDim2.new(1, -8, 0, 44),
+		UDim2.fromOffset(0, 0), COL_ROW)
+	row.LayoutOrder = mechOrder
+	corner(row, 6)
+
+	makeLabel(row, label, UDim2.new(0.4, 0, 0, 20), UDim2.fromOffset(8, 4), 12)
+
+	local current = (serverState and (serverState.Mechanics :: any)[key]) or options[1]
+	local choiceLabel = makeLabel(row, tostring(current),
+		UDim2.new(0.25, 0, 0, 20),
+		UDim2.new(0.4, 0, 0, 4), 12, COL_GREEN, Enum.TextXAlignment.Center)
+
+	local idx = 1
+	for i, opt in ipairs(options) do
+		if opt == current then idx = i end
+	end
+
+	local prevBtn = makeButton(row, "◀", UDim2.fromOffset(28, 28),
+		UDim2.new(0.65, 0, 0, 8), Color3.fromRGB(50, 50, 80))
+	local nextBtn = makeButton(row, "▶", UDim2.fromOffset(28, 28),
+		UDim2.new(0.85, 0, 0, 8), Color3.fromRGB(50, 50, 80))
+
+	local function update()
+		choiceLabel.Text = options[idx]
+		setMechanic(key, options[idx])
+	end
+
+	prevBtn.MouseButton1Click:Connect(function()
+		idx = ((idx - 2) % #options) + 1
+		update()
+	end)
+	nextBtn.MouseButton1Click:Connect(function()
+		idx = (idx % #options) + 1
+		update()
+	end)
+end
+
+-- Build mechanics rows
+addSliderRow("Gravity",              "Gravity",            10,   1000, 10  )
+addSliderRow("MaxHP",                "Max HP",             50,   5000, 50  )
+addSliderRow("DamageMultiplier",     "Damage Multiplier",  0.1,  10,   0.1 )
+addSliderRow("BasicDamage",          "Basic Attack Dmg",   1,    500,  1   )
+addSliderRow("BasicCooldown",        "Basic Cooldown (s)", 0.1,  5,    0.05)
+addSliderRow("BasicRange",           "Basic Range",        1,    50,   1   )
+addSliderRow("MoveSpeed",            "Move Speed",         2,    100,  2   )
+addSliderRow("RespawnTime",          "Respawn Time (s)",   1,    30,   1   )
+addSliderRow("BlockDamageReduction", "Block Reduction",    0,    1,    0.05)
+addSliderRow("DashIframeDuration",   "Dash Iframes (s)",   0,    2,    0.05)
+addSliderRow("RoundDuration",        "Round Time (s)",     30,   600,  30  )
+addChoiceRow("RoundMode",            "Round Mode",         { "FFA", "TimedFFA", "1v1" })
+
+-- ── Moveset tab ───────────────────────────────────────────────────────────────
+
+-- Left: list panel (~55% width)
+local moveListPanel = makeFrame(movesetContent,
+	UDim2.new(0.55, -4, 1, -8),
+	UDim2.fromOffset(4, 4), COL_ROW)
+corner(moveListPanel, 6)
+
+makeLabel(moveListPanel, "Registered Movesets",
+	UDim2.new(1, -8, 0, 20), UDim2.fromOffset(4, 4),
+	12, COL_DIM, Enum.TextXAlignment.Center)
+
+local moveScroll = Instance.new("ScrollingFrame")
+moveScroll.Size                = UDim2.new(1, 0, 1, -28)
+moveScroll.Position            = UDim2.fromOffset(0, 28)
+moveScroll.BackgroundTransparency = 1
+moveScroll.BorderSizePixel     = 0
+moveScroll.ScrollBarThickness  = 5
+moveScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+moveScroll.CanvasSize          = UDim2.fromOffset(0, 0)
+moveScroll.Parent              = moveListPanel
+
+local moveListLayout = Instance.new("UIListLayout")
+moveListLayout.FillDirection  = Enum.FillDirection.Vertical
+moveListLayout.SortOrder      = Enum.SortOrder.LayoutOrder
+moveListLayout.Padding        = UDim.new(0, 3)
+moveListLayout.Parent         = moveScroll
+
+-- Right: upload panel
+local moveUploadPanel = makeFrame(movesetContent,
+	UDim2.new(0.45, -8, 1, -8),
+	UDim2.new(0.55, 4, 0, 4), COL_ROW)
+corner(moveUploadPanel, 6)
+
+makeLabel(moveUploadPanel, "Upload Custom Moveset",
+	UDim2.new(1, -8, 0, 18), UDim2.fromOffset(4, 4),
+	12, COL_DIM, Enum.TextXAlignment.Center)
+
+makeLabel(moveUploadPanel, "Paste JSON below:",
+	UDim2.new(1, -8, 0, 14), UDim2.fromOffset(4, 26),
+	11, COL_DIM)
+
+local moveJsonBox = Instance.new("TextBox")
+moveJsonBox.PlaceholderText = '{"name":"My Move","moves":{"basic":{...},"1":{...},...}}'
+moveJsonBox.MultiLine        = true
+moveJsonBox.ClearTextOnFocus = false
+moveJsonBox.Size             = UDim2.new(1, -8, 0, 180)
+moveJsonBox.Position         = UDim2.fromOffset(4, 44)
+moveJsonBox.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+moveJsonBox.TextColor3       = COL_TEXT
+moveJsonBox.PlaceholderColor3 = COL_DIM
+moveJsonBox.Font              = Enum.Font.Code
+moveJsonBox.TextSize          = 10
+moveJsonBox.TextXAlignment    = Enum.TextXAlignment.Left
+moveJsonBox.TextYAlignment    = Enum.TextYAlignment.Top
+moveJsonBox.BorderSizePixel   = 0
+moveJsonBox.Parent            = moveUploadPanel
+corner(moveJsonBox, 4)
+
+local moveStatusLabel = makeLabel(moveUploadPanel, "",
+	UDim2.new(1, -8, 0, 30), UDim2.fromOffset(4, 228),
+	11, COL_GREEN, Enum.TextXAlignment.Center)
+moveStatusLabel.TextWrapped = true
+
+local moveUploadBtn = makeButton(moveUploadPanel, "Upload Moveset",
+	UDim2.new(1, -8, 0, 28), UDim2.fromOffset(4, 262),
+	COL_ACCENT)
+
+local currentMoveset = ""
+
+local function rebuildMoveList(state: ServerState)
+	-- Clear
+	for _, c in ipairs(moveScroll:GetChildren()) do
+		if not c:IsA("UIListLayout") then c:Destroy() end
+	end
+
+	for i, entry in ipairs(state.MovesetList) do
+		local row = makeFrame(moveScroll, UDim2.new(1, -4, 0, 34),
+			UDim2.fromOffset(0, 0), Color3.fromRGB(25, 30, 46))
+		row.LayoutOrder = i
+		corner(row, 4)
+
+		local badge = entry.isBuiltin and " [built-in]" or " [custom]"
+		local nameColor = entry.name == state.PlayerMoveset and COL_GREEN or COL_TEXT
+		makeLabel(row, entry.name .. badge,
+			UDim2.new(0.65, 0, 1, 0), UDim2.fromOffset(6, 0),
+			11, nameColor)
+
+		local applyBtn = makeButton(row, "Apply",
+			UDim2.fromOffset(56, 24), UDim2.new(1, -62, 0, 5),
+			COL_ACCENT)
+		local entryName = entry.name
+		applyBtn.MouseButton1Click:Connect(function()
+			Remotes.Events.ModMenuApplyMoveset:FireServer(entryName)
+			currentMoveset = entryName
+			if serverState then
+				serverState.PlayerMoveset = entryName
+				rebuildMoveList(serverState)
+			end
+		end)
+	end
+end
+
+moveUploadBtn.MouseButton1Click:Connect(function()
+	local raw = moveJsonBox.Text
+	if raw == "" then
+		moveStatusLabel.Text = "Paste JSON first"
+		moveStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	-- Client pre-validation
+	local parseOk, parsed = pcall(function()
+		return HttpService:JSONDecode(raw)
+	end)
+	if not parseOk then
+		moveStatusLabel.Text = "Invalid JSON: parse failed"
+		moveStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	local registeredNames: { [string]: boolean } = {}
+	if serverState then
+		for _, entry in ipairs(serverState.MovesetList) do
+			registeredNames[entry.name] = true
+		end
+	end
+
+	local result = JSONValidator.ValidateMoveset(parsed, registeredNames)
+	if not result.ok then
+		moveStatusLabel.Text = "Error: " .. (result.err or "?")
+		moveStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	moveStatusLabel.Text = "Uploading..."
+	moveStatusLabel.TextColor3 = COL_DIM
+	Remotes.Events.ModMenuUploadMoveset:FireServer(raw)
+
+	-- Refresh list after server processes it
+	task.delay(1.2, function()
+		refreshState()
+		task.wait(0.1)
+		if serverState then rebuildMoveList(serverState) end
+		moveStatusLabel.Text = "Uploaded: " .. tostring((parsed :: any).name)
+		moveStatusLabel.TextColor3 = COL_GREEN
+	end)
+end)
+
+-- ── Map tab ───────────────────────────────────────────────────────────────────
+
+local mapListPanel = makeFrame(mapContent,
+	UDim2.new(0.55, -4, 1, -8),
+	UDim2.fromOffset(4, 4), COL_ROW)
+corner(mapListPanel, 6)
+
+makeLabel(mapListPanel, "Registered Maps",
+	UDim2.new(1, -8, 0, 20), UDim2.fromOffset(4, 4),
+	12, COL_DIM, Enum.TextXAlignment.Center)
+
+local mapScroll = Instance.new("ScrollingFrame")
+mapScroll.Size                = UDim2.new(1, 0, 1, -28)
+mapScroll.Position            = UDim2.fromOffset(0, 28)
+mapScroll.BackgroundTransparency = 1
+mapScroll.BorderSizePixel     = 0
+mapScroll.ScrollBarThickness  = 5
+mapScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+mapScroll.CanvasSize          = UDim2.fromOffset(0, 0)
+mapScroll.Parent              = mapListPanel
+
+local mapListLayout = Instance.new("UIListLayout")
+mapListLayout.FillDirection  = Enum.FillDirection.Vertical
+mapListLayout.SortOrder      = Enum.SortOrder.LayoutOrder
+mapListLayout.Padding        = UDim.new(0, 3)
+mapListLayout.Parent         = mapScroll
+
+local mapUploadPanel = makeFrame(mapContent,
+	UDim2.new(0.45, -8, 1, -8),
+	UDim2.new(0.55, 4, 0, 4), COL_ROW)
+corner(mapUploadPanel, 6)
+
+makeLabel(mapUploadPanel, "Upload Custom Map",
+	UDim2.new(1, -8, 0, 18), UDim2.fromOffset(4, 4),
+	12, COL_DIM, Enum.TextXAlignment.Center)
+
+makeLabel(mapUploadPanel, "Paste JSON below:",
+	UDim2.new(1, -8, 0, 14), UDim2.fromOffset(4, 26),
+	11, COL_DIM)
+
+local mapJsonBox = Instance.new("TextBox")
+mapJsonBox.PlaceholderText = '{"name":"My Map","theme":"urban","skyboxColor":[50,50,80],"platforms":[...],"spawnPoints":[...],"boundaries":120}'
+mapJsonBox.MultiLine        = true
+mapJsonBox.ClearTextOnFocus = false
+mapJsonBox.Size             = UDim2.new(1, -8, 0, 180)
+mapJsonBox.Position         = UDim2.fromOffset(4, 44)
+mapJsonBox.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+mapJsonBox.TextColor3       = COL_TEXT
+mapJsonBox.PlaceholderColor3 = COL_DIM
+mapJsonBox.Font              = Enum.Font.Code
+mapJsonBox.TextSize          = 10
+mapJsonBox.TextXAlignment    = Enum.TextXAlignment.Left
+mapJsonBox.TextYAlignment    = Enum.TextYAlignment.Top
+mapJsonBox.BorderSizePixel   = 0
+mapJsonBox.Parent            = mapUploadPanel
+corner(mapJsonBox, 4)
+
+local mapStatusLabel = makeLabel(mapUploadPanel, "",
+	UDim2.new(1, -8, 0, 30), UDim2.fromOffset(4, 228),
+	11, COL_GREEN, Enum.TextXAlignment.Center)
+mapStatusLabel.TextWrapped = true
+
+local mapUploadBtn = makeButton(mapUploadPanel, "Upload Map",
+	UDim2.new(1, -8, 0, 28), UDim2.fromOffset(4, 262),
+	COL_ACCENT)
+
+local currentMapName = ""
+
+local function rebuildMapList(state: ServerState)
+	for _, c in ipairs(mapScroll:GetChildren()) do
+		if not c:IsA("UIListLayout") then c:Destroy() end
+	end
+
+	for i, entry in ipairs(state.MapList) do
+		local row = makeFrame(mapScroll, UDim2.new(1, -4, 0, 34),
+			UDim2.fromOffset(0, 0), Color3.fromRGB(25, 30, 46))
+		row.LayoutOrder = i
+		corner(row, 4)
+
+		local badge = entry.isBuiltin and " [built-in]" or " [custom]"
+		local nameColor = entry.name == state.CurrentMap and COL_GREEN or COL_TEXT
+		makeLabel(row, entry.name .. badge,
+			UDim2.new(0.65, 0, 1, 0), UDim2.fromOffset(6, 0),
+			11, nameColor)
+
+		local loadBtn = makeButton(row, "Load",
+			UDim2.fromOffset(56, 24), UDim2.new(1, -62, 0, 5),
+			COL_ACCENT)
+		local entryName = entry.name
+		loadBtn.MouseButton1Click:Connect(function()
+			Remotes.Events.ModMenuSwitchMap:FireServer(entryName)
+		end)
+	end
+end
+
+mapUploadBtn.MouseButton1Click:Connect(function()
+	local raw = mapJsonBox.Text
+	if raw == "" then
+		mapStatusLabel.Text = "Paste JSON first"
+		mapStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	local parseOk, parsed = pcall(function()
+		return HttpService:JSONDecode(raw)
+	end)
+	if not parseOk then
+		mapStatusLabel.Text = "Invalid JSON: parse failed"
+		mapStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	local registeredNames: { [string]: boolean } = {}
+	if serverState then
+		for _, entry in ipairs(serverState.MapList) do
+			registeredNames[entry.name] = true
+		end
+	end
+
+	local result = JSONValidator.ValidateMap(parsed, registeredNames)
+	if not result.ok then
+		mapStatusLabel.Text = "Error: " .. (result.err or "?")
+		mapStatusLabel.TextColor3 = COL_RED
+		return
+	end
+
+	mapStatusLabel.Text = "Uploading..."
+	mapStatusLabel.TextColor3 = COL_DIM
+	Remotes.Events.ModMenuUploadMap:FireServer(raw)
+
+	task.delay(1.2, function()
+		refreshState()
+		task.wait(0.1)
+		if serverState then rebuildMapList(serverState) end
+		mapStatusLabel.Text = "Uploaded: " .. tostring((parsed :: any).name)
+		mapStatusLabel.TextColor3 = COL_GREEN
+	end)
+end)
+
+-- Listen for map changes to update the active highlight
+Remotes.Events.MapLoaded.OnClientEvent:Connect(function(mapName: unknown)
+	currentMapName = tostring(mapName)
+	if serverState then
+		serverState.CurrentMap = currentMapName
+		rebuildMapList(serverState)
+	end
+end)
+
+-- ── Populate lists when mod menu opens ───────────────────────────────────────
+
+screen:GetPropertyChangedSignal("Enabled"):Connect(function()
+	if screen.Enabled and serverState then
+		rebuildMoveList(serverState)
+		rebuildMapList(serverState)
+		selectTab(activeTab == "" and "Mechanics" or activeTab)
+	end
+end)
+
+-- ── Refresh lists after state loads ──────────────────────────────────────────
+
+task.spawn(function()
+	task.wait(2)  -- wait for server state to load
+	refreshState()
+	if serverState then
+		rebuildMoveList(serverState)
+		rebuildMapList(serverState)
+	end
+end)
+
+-- Initial tab
+selectTab("Mechanics")

@@ -1,5 +1,5 @@
 {
-  "name": "MonsterRealm",
+  "name": "ValiantSky",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
@@ -8,19 +8,10 @@
     "ServerScriptService": {
       "$path": "src/ServerScriptService"
     },
-    "ServerStorage": {
-      "$path": "src/ServerStorage"
-    },
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "$path": "src/StarterPlayer/StarterPlayerScripts"
-      },
-      "StarterCharacterScripts": {
-        "$path": "src/StarterPlayer/StarterCharacterScripts"
       }
-    },
-    "StarterGui": {
-      "$path": "src/StarterGui"
     },
     "Workspace": {
       "$properties": {
@@ -30,8 +21,8 @@
     },
     "Lighting": {
       "$properties": {
-        "Ambient": [0.5, 0.5, 0.5],
-        "Brightness": 2,
+        "Ambient": [0.3, 0.3, 0.4],
+        "Brightness": 2.5,
         "ClockTime": 14,
         "GeographicLatitude": 41.7
       }
