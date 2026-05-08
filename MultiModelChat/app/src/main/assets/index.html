@@ -283,7 +283,7 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
 .sheet-section{padding:14px 18px;border-bottom:1px solid var(--border)}
 .sheet-section:last-child{border-bottom:none;padding-bottom:max(18px,env(safe-area-inset-bottom))}
 .sheet-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;font-weight:600}
-.theme-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .swatch{aspect-ratio:1;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s,border-color .15s}
 .swatch.active{border-color:var(--text)}
 .swatch:active{transform:scale(.9)}
@@ -325,6 +325,87 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
 
 /* ── Toast ──────────────────────────────────────────────────────────────── */
 #err-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;padding:8px 16px;border-radius:10px;font-size:12px;display:none;z-index:900;max-width:90%;text-align:center}
+
+/* ── Debate mode ─────────────────────────────────────────────────────────── */
+#debate-overlay{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.6)}
+#debate-overlay.show{display:block}
+#debate-sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:601;
+  background:var(--surface);border-radius:18px 18px 0 0;border-top:1px solid var(--border);
+  max-height:92vh;overflow-y:auto;transform:translateY(100%);transition:transform .3s ease;
+}
+#debate-overlay.show #debate-sheet{transform:translateY(0)}
+#debate-topic{
+  width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:9px 10px;font-size:13px;resize:none;min-height:60px;max-height:140px;
+  font-family:inherit;line-height:1.4;outline:none;
+}
+#debate-topic:focus{border-color:var(--accent)}
+.debate-name-inp{
+  width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;
+}
+.debate-name-inp:focus{border-color:var(--accent)}
+.debate-model-card{background:var(--surface2);border-radius:10px;padding:12px;margin-top:4px}
+.debate-head-row{
+  padding:6px 14px;background:rgba(99,102,241,.1);border-bottom:1px solid var(--border);
+  font-size:11px;color:var(--accent2);display:none;align-items:center;gap:8px;flex-shrink:0;
+}
+.debate-head-row.show{display:flex}
+.debate-status{flex:1;font-style:italic}
+.debate-turn-badge{background:var(--accent);color:#fff;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700}
+.debate-stop-btn{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:6px}
+.debate-stop-btn:active{background:var(--border)}
+.msg.debate-a{align-self:flex-start;align-items:flex-start}
+.msg.debate-b{align-self:flex-end;align-items:flex-end}
+.msg.debate-topic{align-self:center;align-items:center;max-width:90%;text-align:center}
+.msg.debate-topic .msg-role{color:var(--muted)}
+.msg.debate-topic .msg-bubble{
+  background:rgba(99,102,241,.08);border:1px dashed var(--accent);
+  border-radius:12px;font-style:italic;font-size:13px;color:var(--muted);text-align:center;
+}
+.msg.debate-a .msg-role{color:var(--accent2)}
+.msg.debate-b .msg-role{color:var(--green)}
+.msg.debate-a .msg-bubble{background:rgba(99,102,241,.14);border-bottom-left-radius:4px}
+.msg.debate-b .msg-bubble{background:rgba(34,197,94,.1);border-bottom-right-radius:4px}
+.debate-end-card{
+  align-self:center;background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:8px 18px;font-size:12px;color:var(--muted);text-align:center;
+}
+
+/* ── Cyber neon theme animations ─────────────────────────────────────────── */
+@keyframes neon-header-pulse{
+  0%,100%{border-bottom-color:#06b6d4;box-shadow:0 2px 8px rgba(6,182,212,.3)}
+  50%{border-bottom-color:#22d3ee;box-shadow:0 2px 18px rgba(6,182,212,.65)}
+}
+@keyframes neon-send-pulse{
+  0%,100%{box-shadow:0 0 6px rgba(6,182,212,.5)}
+  50%{box-shadow:0 0 16px rgba(6,182,212,.9),0 0 28px rgba(6,182,212,.3)}
+}
+@keyframes neon-swatch-ring{
+  0%,100%{box-shadow:0 0 4px #06b6d4}
+  50%{box-shadow:0 0 10px #22d3ee,0 0 20px rgba(6,182,212,.4)}
+}
+@keyframes neon-border-cycle{
+  0%{border-color:#06b6d4}25%{border-color:#a855f7}
+  50%{border-color:#22d3ee}75%{border-color:#0ea5e9}100%{border-color:#06b6d4}
+}
+body.theme-cyber .hdr{animation:neon-header-pulse 2.8s ease-in-out infinite}
+body.theme-cyber #send-btn{animation:neon-send-pulse 2s ease-in-out infinite}
+body.theme-cyber .hbtn{box-shadow:0 0 6px rgba(6,182,212,.6)}
+body.theme-cyber #sw-cyber{animation:neon-swatch-ring 2s ease-in-out infinite}
+body.theme-cyber #user-input:focus{box-shadow:0 0 10px rgba(6,182,212,.35)}
+body.theme-cyber .msg.user .msg-bubble{
+  border:1px solid rgba(6,182,212,.35);
+  box-shadow:0 0 8px rgba(6,182,212,.15);
+}
+body.theme-cyber .hdr-title{
+  background:linear-gradient(90deg,#06b6d4,#a855f7,#06b6d4);
+  background-size:200% 100%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:neon-gradient-slide 4s linear infinite;
+}
+@keyframes neon-gradient-slide{0%{background-position:0%}100%{background-position:200%}}
 </style>
 </head>
 <body>
@@ -384,6 +465,7 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="hbtn" onclick="openHistory()" title="History">📋</button>
         <button class="hbtn" onclick="newChat()" title="New chat">✏️</button>
+        <button class="hbtn" onclick="openDebate()" title="Model Debate">⚔️</button>
         <button class="hbtn" onclick="openSettings()" title="Settings">⚙️</button>
       </div>
     </div>
@@ -391,6 +473,12 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
       <span class="hdr-sub" id="model-name-label"></span>
       <button class="chg-btn" id="change-model-btn" onclick="doChangeModel()" style="display:none">Change</button>
     </div>
+  </div>
+  <div id="debate-head-row" class="debate-head-row">
+    <span>⚔️</span>
+    <span class="debate-status" id="debate-status-txt">Debate in progress…</span>
+    <span class="debate-turn-badge" id="debate-turn-badge">0</span>
+    <button class="debate-stop-btn" onclick="stopDebate()">■ Stop</button>
   </div>
 
   <!-- API Key entry -->
@@ -474,6 +562,10 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
           <div class="swatch" id="sw-light" style="background:#f1f5f9;border:2px solid #cbd5e1" onclick="setTheme('light')"></div>
           <div class="swatch-label">Light</div>
         </div>
+        <div>
+          <div class="swatch" id="sw-cyber" style="background:linear-gradient(135deg,#040c0e 40%,#06b6d4 100%)" onclick="setTheme('cyber')"></div>
+          <div class="swatch-label">Cyber</div>
+        </div>
       </div>
     </div>
 
@@ -498,6 +590,61 @@ details.think-block[open] summary::before{transform:rotate(90deg)}
       <div class="sheet-label">System Prompt</div>
       <textarea id="sysprompt" rows="3" placeholder="Give the AI a persona or instructions…"
         oninput="autoResize(this)"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ── Debate setup sheet ─────────────────────────────────────────────────── -->
+<div id="debate-overlay" onclick="debateOverlayClick(event)">
+  <div id="debate-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">⚔️ Model Debate</div>
+
+    <div class="sheet-section">
+      <div class="sheet-label">Starting Topic / Prompt</div>
+      <textarea id="debate-topic" rows="3" placeholder="E.g. 'Debate the ethics of AI consciousness' or 'Argue for and against open-source AI'"
+        oninput="autoResize(this)"></textarea>
+    </div>
+
+    <div class="sheet-section">
+      <div class="sheet-label">Model A — speaks first</div>
+      <div class="debate-model-card">
+        <input class="debate-name-inp" id="model-a-label" type="text" value="Model A" placeholder="Display name"/>
+        <div class="mode-toggle">
+          <button class="mtog active" id="da-local" onclick="setDebateSide('a','local')">🤖 Local</button>
+          <button class="mtog" id="da-cloud" onclick="setDebateSide('a','cloud')">☁️ Cloud</button>
+        </div>
+        <select class="sh-select" id="da-model-select" style="margin-top:8px;display:none"></select>
+      </div>
+    </div>
+
+    <div class="sheet-section">
+      <div class="sheet-label">Model B — responds</div>
+      <div class="debate-model-card">
+        <input class="debate-name-inp" id="model-b-label" type="text" value="Model B" placeholder="Display name"/>
+        <div class="mode-toggle">
+          <button class="mtog" id="db-local" onclick="setDebateSide('b','local')">🤖 Local</button>
+          <button class="mtog active" id="db-cloud" onclick="setDebateSide('b','cloud')">☁️ Cloud</button>
+        </div>
+        <select class="sh-select" id="db-model-select" style="margin-top:8px"></select>
+      </div>
+    </div>
+
+    <div class="sheet-section">
+      <div class="sheet-label">Turns per model</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <input type="range" id="debate-turns-slider" min="1" max="20" value="5"
+          oninput="document.getElementById('debate-turns-val').textContent=this.value"
+          style="flex:1;accent-color:var(--accent)"/>
+        <span id="debate-turns-val" style="color:var(--accent2);font-weight:700;min-width:20px">5</span>
+      </div>
+    </div>
+
+    <div class="sheet-section" style="padding-bottom:max(18px,env(safe-area-inset-bottom))">
+      <button onclick="startDebate()"
+        style="width:100%;padding:13px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer">
+        ⚔️ Start Debate
+      </button>
     </div>
   </div>
 </div>
@@ -556,6 +703,7 @@ var THEMES = {
   forest: {'--bg':'#0d1a0e','--surface':'#152418','--surface2':'#1c2e20','--accent':'#22c55e','--accent2':'#4ade80','--text':'#e2e8f0','--muted':'#86a892','--border':'#253c28','--user-bg':'#1a3520','--asst-bg':'#121f14','--red':'#ef4444','--green':'#4ade80'},
   sunset: {'--bg':'#1a0a0e','--surface':'#2a1018','--surface2':'#381620','--accent':'#f97316','--accent2':'#fb923c','--text':'#f0e6ea','--muted':'#c09aa8','--border':'#4a1f2c','--user-bg':'#4a1a28','--asst-bg':'#200d12','--red':'#fb7185','--green':'#4ade80'},
   light:  {'--bg':'#f8fafc','--surface':'#ffffff','--surface2':'#f1f5f9','--accent':'#6366f1','--accent2':'#4f46e5','--text':'#1e293b','--muted':'#64748b','--border':'#e2e8f0','--user-bg':'#e0e7ff','--asst-bg':'#f1f5f9','--red':'#dc2626','--green':'#16a34a'},
+  cyber:  {'--bg':'#040c0e','--surface':'#081418','--surface2':'#0c1e22','--accent':'#06b6d4','--accent2':'#22d3ee','--text':'#e2e8f0','--muted':'#64748b','--border':'#0e3140','--user-bg':'#043040','--asst-bg':'#060f12','--red':'#f43f5e','--green':'#10b981'},
 };
 
 function setTheme(name) {
@@ -563,6 +711,7 @@ function setTheme(name) {
   var root = document.documentElement;
   for (var k in t) root.style.setProperty(k, t[k]);
   localStorage.setItem('theme', name);
+  document.body.className = name === 'cyber' ? 'theme-cyber' : '';
   document.querySelectorAll('.swatch').forEach(function(el) {
     el.classList.toggle('active', el.id === 'sw-' + name);
   });
@@ -1421,6 +1570,268 @@ function showErr(msg) {
   t.textContent = msg; t.style.display = 'block';
   clearTimeout(showErr._t);
   showErr._t = setTimeout(function(){ t.style.display='none'; }, 5000);
+}
+
+// ── Debate Mode ───────────────────────────────────────────────────────────────
+var debateRunning = false;
+var debateAbort = null;
+var debateTurnCount = 0;
+var debateHistA = [];   // conversation from Model A's POV
+var debateHistB = [];   // conversation from Model B's POV
+var debateCfg = {
+  a: {mode:'local',  modelId:'', label:'Model A'},
+  b: {mode:'cloud',  modelId:'claude-sonnet-4-6', label:'Model B'}
+};
+
+function openDebate() {
+  populateDebateSelects();
+  // Default B to first cloud model
+  var sel = document.getElementById('db-model-select');
+  var saved = localStorage.getItem('cloud_model');
+  if (saved && sel.querySelector('option[value="'+saved+'"]')) sel.value = saved;
+  document.getElementById('debate-overlay').classList.add('show');
+}
+function closeDebateSheet() {
+  document.getElementById('debate-overlay').classList.remove('show');
+}
+function debateOverlayClick(e) {
+  if (e.target.id === 'debate-overlay') closeDebateSheet();
+}
+
+function populateDebateSelects() {
+  ['da-model-select','db-model-select'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    sel.innerHTML = '';
+    var custom = (function(){ try{return JSON.parse(localStorage.getItem('custom_models')||'[]');}catch(e){return[];} })();
+    BUILTIN_MODELS.concat(custom.map(function(m){return{id:m,label:m};})).forEach(function(m) {
+      var o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label || m.id;
+      sel.appendChild(o);
+    });
+  });
+}
+
+function setDebateSide(which, m) {
+  debateCfg[which].mode = m;
+  var pre = which === 'a' ? 'da' : 'db';
+  document.getElementById(pre+'-local').classList.toggle('active', m==='local');
+  document.getElementById(pre+'-cloud').classList.toggle('active', m==='cloud');
+  document.getElementById(pre+'-model-select').style.display = m==='cloud' ? 'block' : 'none';
+}
+
+async function startDebate() {
+  var topic = document.getElementById('debate-topic').value.trim();
+  if (!topic) { showErr('Enter a starting topic.'); return; }
+
+  var maxTurnsEach = parseInt(document.getElementById('debate-turns-slider').value, 10);
+  debateCfg.a.label   = document.getElementById('model-a-label').value.trim() || 'Model A';
+  debateCfg.b.label   = document.getElementById('model-b-label').value.trim() || 'Model B';
+  debateCfg.a.modelId = document.getElementById('da-model-select').value;
+  debateCfg.b.modelId = document.getElementById('db-model-select').value;
+
+  if ((debateCfg.a.mode==='cloud'||debateCfg.b.mode==='cloud') && !localStorage.getItem('anthropic_key')) {
+    showErr('Add your Anthropic API key in Settings first.'); return;
+  }
+
+  closeDebateSheet();
+
+  // Reset state
+  debateHistA = []; debateHistB = [];
+  debateTurnCount = 0; debateRunning = true;
+  debateAbort = new AbortController();
+
+  // Clear messages, show debate header
+  var container = document.getElementById('messages');
+  var es = document.getElementById('empty-state');
+  if (es) es.remove();
+  container.innerHTML = '';
+  document.getElementById('debate-head-row').classList.add('show');
+  updateDebateHead('starting…');
+
+  // Override send button as stop
+  var btn = document.getElementById('send-btn');
+  btn.textContent = '■ Stop';
+  btn.onclick = stopDebate;
+
+  // Render topic card
+  (function(){
+    var w = document.createElement('div'); w.className = 'msg debate-topic';
+    var lbl = document.createElement('span'); lbl.className = 'msg-role'; lbl.textContent = 'Topic';
+    var bub = document.createElement('div'); bub.className = 'msg-bubble'; bub.textContent = topic;
+    w.appendChild(lbl); w.appendChild(bub); container.appendChild(w); scrollBottom();
+  })();
+
+  // Prime histories — both start with the topic
+  var sysA = 'You are '+debateCfg.a.label+' in a debate. Be concise (2–3 paragraphs). Engage directly with what was just said.';
+  var sysB = 'You are '+debateCfg.b.label+' in a debate. Be concise (2–3 paragraphs). Engage directly with what was just said.';
+  debateHistA.push({role:'user', content: topic});
+  debateHistB.push({role:'user', content: topic});
+
+  try {
+    for (var turn = 0; turn < maxTurnsEach && debateRunning; turn++) {
+      // ── Model A speaks ──
+      updateDebateHead(debateCfg.a.label + ' thinking…');
+      var respA = await debateStreamCall(debateCfg.a, debateHistA, sysA, 'a');
+      if (!debateRunning) break;
+      debateHistA.push({role:'assistant', content: respA});
+      debateHistB.push({role:'user', content: debateCfg.a.label + ':\n' + respA});
+      debateTurnCount++;
+      updateDebateHead('');
+
+      if (!debateRunning) break;
+      await new Promise(function(r){ setTimeout(r, 400); });
+
+      // ── Model B speaks ──
+      updateDebateHead(debateCfg.b.label + ' thinking…');
+      var respB = await debateStreamCall(debateCfg.b, debateHistB, sysB, 'b');
+      if (!debateRunning) break;
+      debateHistB.push({role:'assistant', content: respB});
+      debateHistA.push({role:'user', content: debateCfg.b.label + ':\n' + respB});
+      debateTurnCount++;
+      updateDebateHead('');
+
+      await new Promise(function(r){ setTimeout(r, 400); });
+    }
+  } catch(e) {
+    if (e.name !== 'AbortError') showErr('Debate error: ' + e.message);
+  }
+
+  // Finish
+  debateRunning = false; debateAbort = null;
+  btn.textContent = 'Send'; btn.onclick = sendMessage;
+
+  // End card
+  var ec = document.createElement('div');
+  ec.className = 'debate-end-card';
+  ec.textContent = '⚔️ Debate ended · ' + debateTurnCount + ' total turns';
+  document.getElementById('messages').appendChild(ec);
+  scrollBottom();
+  updateDebateHead('Ended');
+}
+
+function stopDebate() {
+  debateRunning = false;
+  if (debateAbort) { debateAbort.abort(); debateAbort = null; }
+  document.getElementById('send-btn').textContent = 'Send';
+  document.getElementById('send-btn').onclick = sendMessage;
+}
+
+function updateDebateHead(status) {
+  var row = document.getElementById('debate-head-row');
+  if (!debateRunning && status === '') { row.classList.remove('show'); return; }
+  row.classList.add('show');
+  document.getElementById('debate-turn-badge').textContent = 'T' + debateTurnCount;
+  if (status !== undefined) document.getElementById('debate-status-txt').textContent = status || '';
+}
+
+async function debateStreamCall(cfg, history, sysPrompt, side) {
+  var container = document.getElementById('messages');
+  var wrap = document.createElement('div'); wrap.className = 'msg debate-' + side;
+  var lbl  = document.createElement('span'); lbl.className = 'msg-role'; lbl.textContent = cfg.label;
+  var bub  = document.createElement('div'); bub.className = 'msg-bubble streaming';
+  wrap.appendChild(lbl); wrap.appendChild(bub);
+  container.appendChild(wrap); scrollBottom();
+
+  var fullText = '';
+  try {
+    if (cfg.mode === 'local') {
+      fullText = await debateStreamLocal(bub, history, sysPrompt);
+    } else {
+      fullText = await debateStreamCloud(bub, history, sysPrompt, cfg.modelId);
+    }
+  } finally {
+    bub.classList.remove('streaming');
+  }
+
+  // Handle <think> blocks
+  var cleaned = fullText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  var thinks = []; var m, re = /<think>([\s\S]*?)<\/think>/gi;
+  while ((m = re.exec(fullText)) !== null) thinks.push(m[1].trim());
+
+  if (thinks.length > 0) {
+    wrap.removeChild(bub);
+    var tw = document.createElement('div'); tw.className = 'think-wrap';
+    thinks.forEach(function(th) {
+      var det = document.createElement('details'); det.className = 'think-block';
+      var sum = document.createElement('summary'); sum.textContent = '💭 Thinking';
+      var tc  = document.createElement('div'); tc.className = 'think-content'; tc.textContent = th;
+      det.appendChild(sum); det.appendChild(tc); tw.appendChild(det);
+    });
+    var resp = document.createElement('div');
+    resp.className = 'msg-bubble think-response'; resp.textContent = cleaned || fullText;
+    wrap.appendChild(tw); wrap.appendChild(resp);
+  } else {
+    bub.textContent = fullText;
+  }
+  scrollBottom();
+  return fullText;
+}
+
+async function debateStreamCloud(bub, history, sysPrompt, modelId) {
+  var key = localStorage.getItem('anthropic_key') || '';
+  var resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST', signal: debateAbort.signal,
+    headers:{
+      'Content-Type':'application/json', 'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model: modelId || 'claude-sonnet-4-6',
+      max_tokens: 1024, stream: true,
+      system: sysPrompt,
+      messages: history
+    })
+  });
+  if (!resp.ok) throw new Error('API ' + resp.status);
+  var reader = resp.body.getReader(), dec = new TextDecoder(), buf = '', text = '', evType = '';
+  while (true) {
+    var chunk = await reader.read(); if (chunk.done) break;
+    buf += dec.decode(chunk.value, {stream:true});
+    var lines = buf.split('\n'); buf = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.startsWith('event:')) { evType = line.slice(6).trim(); continue; }
+      if (!line.startsWith('data:')) continue;
+      try {
+        var ev = JSON.parse(line.slice(5).trim());
+        if (evType === 'content_block_delta' && ev.delta) {
+          var t = ev.delta.type === 'thinking_delta'
+            ? '<think>' + ev.delta.thinking + '</think>'
+            : (ev.delta.text || '');
+          if (t) { text += t; bub.textContent = text; scrollBottom(); }
+        }
+      } catch(e2) {}
+    }
+  }
+  return text;
+}
+
+async function debateStreamLocal(bub, history, sysPrompt) {
+  var msgs = sysPrompt ? [{role:'system', content:sysPrompt}].concat(history) : history.slice();
+  var resp = await fetch('http://127.0.0.1:' + localPort + '/v1/chat/completions', {
+    method:'POST', signal: debateAbort.signal,
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({messages: msgs, stream: true, temperature: 0.8, max_tokens: 512})
+  });
+  if (!resp.ok) throw new Error('Local ' + resp.status);
+  var reader = resp.body.getReader(), dec = new TextDecoder(), buf = '', text = '';
+  while (true) {
+    var chunk = await reader.read(); if (chunk.done) break;
+    buf += dec.decode(chunk.value, {stream:true});
+    var lines = buf.split('\n'); buf = lines.pop();
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!line.startsWith('data:')) continue;
+      var raw = line.slice(5).trim(); if (raw === '[DONE]') continue;
+      try {
+        var ev = JSON.parse(raw);
+        var delta = ev.choices && ev.choices[0] && ev.choices[0].delta;
+        if (delta && delta.content) { text += delta.content; bub.textContent = text; scrollBottom(); }
+      } catch(e2) {}
+    }
+  }
+  return text;
 }
 </script>
 </body>
