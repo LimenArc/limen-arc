@@ -615,6 +615,16 @@ body.theme-cyber .hdr-title{
           <button class="mtog" id="da-cloud" onclick="setDebateSide('a','cloud')">☁️ Cloud</button>
         </div>
         <select class="sh-select" id="da-model-select" style="margin-top:8px;display:none"></select>
+        <select class="sh-select" id="da-stance" style="margin-top:8px" onchange="onDebateStanceChange('a')">
+          <option value="for">Argue FOR the topic</option>
+          <option value="against">Argue AGAINST the topic</option>
+          <option value="neutral">Neutral / explore</option>
+          <option value="custom">Custom role…</option>
+        </select>
+        <textarea class="debate-name-inp" id="da-custom-role" rows="2"
+          placeholder="Custom instructions for Model A…"
+          style="display:none;margin-top:6px;width:100%;box-sizing:border-box"
+          oninput="autoResize(this)"></textarea>
       </div>
     </div>
 
@@ -627,6 +637,16 @@ body.theme-cyber .hdr-title{
           <button class="mtog active" id="db-cloud" onclick="setDebateSide('b','cloud')">☁️ Cloud</button>
         </div>
         <select class="sh-select" id="db-model-select" style="margin-top:8px"></select>
+        <select class="sh-select" id="db-stance" style="margin-top:8px" onchange="onDebateStanceChange('b')">
+          <option value="against">Argue AGAINST the topic</option>
+          <option value="for">Argue FOR the topic</option>
+          <option value="neutral">Neutral / explore</option>
+          <option value="custom">Custom role…</option>
+        </select>
+        <textarea class="debate-name-inp" id="db-custom-role" rows="2"
+          placeholder="Custom instructions for Model B…"
+          style="display:none;margin-top:6px;width:100%;box-sizing:border-box"
+          oninput="autoResize(this)"></textarea>
       </div>
     </div>
 
@@ -1585,10 +1605,14 @@ var debateCfg = {
 
 function openDebate() {
   populateDebateSelects();
-  // Default B to first cloud model
-  var sel = document.getElementById('db-model-select');
+  // Model A defaults to Haiku (fast), Model B defaults to Sonnet (or last used)
+  var selA = document.getElementById('da-model-select');
+  var selB = document.getElementById('db-model-select');
+  if (selA.querySelector('option[value="claude-haiku-4-5-20251001"]'))
+    selA.value = 'claude-haiku-4-5-20251001';
+  else if (selA.options.length) selA.selectedIndex = selA.options.length - 1;
   var saved = localStorage.getItem('cloud_model');
-  if (saved && sel.querySelector('option[value="'+saved+'"]')) sel.value = saved;
+  if (saved && selB.querySelector('option[value="'+saved+'"]')) selB.value = saved;
   document.getElementById('debate-overlay').classList.add('show');
 }
 function closeDebateSheet() {
@@ -1617,6 +1641,27 @@ function setDebateSide(which, m) {
   document.getElementById(pre+'-local').classList.toggle('active', m==='local');
   document.getElementById(pre+'-cloud').classList.toggle('active', m==='cloud');
   document.getElementById(pre+'-model-select').style.display = m==='cloud' ? 'block' : 'none';
+}
+
+function onDebateStanceChange(which) {
+  var pre = which === 'a' ? 'da' : 'db';
+  var stance = document.getElementById(pre+'-stance').value;
+  document.getElementById(pre+'-custom-role').style.display = stance === 'custom' ? 'block' : 'none';
+}
+
+function buildDebateSysPrompt(which) {
+  var pre = which === 'a' ? 'da' : 'db';
+  var label = debateCfg[which].label;
+  var stance = document.getElementById(pre+'-stance').value;
+  if (stance === 'custom') {
+    var custom = document.getElementById(pre+'-custom-role').value.trim();
+    return custom || ('You are ' + label + ' in a debate. Be concise (2–3 paragraphs).');
+  }
+  if (stance === 'for')
+    return 'You are ' + label + '. You must argue STRONGLY and passionately IN FAVOR OF the topic. Defend your position, attack opposing arguments, and never concede ground. Be concise (2–3 paragraphs).';
+  if (stance === 'against')
+    return 'You are ' + label + '. You must argue STRONGLY and passionately AGAINST the topic. Challenge every claim, expose weaknesses, and never concede ground. Be concise (2–3 paragraphs).';
+  return 'You are ' + label + ' in a debate. Explore the topic thoughtfully from multiple angles. Be concise (2–3 paragraphs).';
 }
 
 async function startDebate() {
@@ -1662,8 +1707,8 @@ async function startDebate() {
   })();
 
   // Prime histories — both start with the topic
-  var sysA = 'You are '+debateCfg.a.label+' in a debate. Be concise (2–3 paragraphs). Engage directly with what was just said.';
-  var sysB = 'You are '+debateCfg.b.label+' in a debate. Be concise (2–3 paragraphs). Engage directly with what was just said.';
+  var sysA = buildDebateSysPrompt('a');
+  var sysB = buildDebateSysPrompt('b');
   debateHistA.push({role:'user', content: topic});
   debateHistB.push({role:'user', content: topic});
 
