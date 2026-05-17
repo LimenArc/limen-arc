@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__label_thread",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__label_message",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__unlabel_thread",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__unlabel_message",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__search_threads",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__get_thread",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__list_labels",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__create_label",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__list_drafts",
+      "mcp__ed34c7d4-6813-432a-aab3-b5aba096fc92__create_draft"
+    ]
+  }
+}
