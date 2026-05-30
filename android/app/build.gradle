@@ -1,0 +1,34 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.limenarc.balloonpop'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.limenarc.balloonpop"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            // Built unsigned by Gradle; the CI workflow signs it with a debug
+            // keystore so the produced APK is installable on a device.
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // No third-party / AndroidX dependencies: pure framework Canvas game.
+}

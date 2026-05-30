@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Water balloon -->
+    <path
+        android:pathData="M54,30 m-22,0 a22,26 0 1,0 44,0 a22,26 0 1,0 -44,0"
+        android:fillColor="#36C7F0" />
+    <path
+        android:pathData="M50,56 L58,56 L54,64 Z"
+        android:fillColor="#36C7F0" />
+    <!-- Highlight -->
+    <path
+        android:pathData="M46,22 m-5,0 a5,6 0 1,0 10,0 a5,6 0 1,0 -10,0"
+        android:fillColor="#BDEBFB" />
+    <!-- Dart shaft -->
+    <path
+        android:pathData="M30,86 L52,64"
+        android:strokeColor="#F4B400"
+        android:strokeWidth="4" />
+    <!-- Dart tip -->
+    <path
+        android:pathData="M52,64 L46,66 L50,70 Z"
+        android:fillColor="#DB4437" />
+    <!-- Dart fletching -->
+    <path
+        android:pathData="M30,86 L24,84 L26,90 Z"
+        android:fillColor="#F4B400" />
+</vector>
