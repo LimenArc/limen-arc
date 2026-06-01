@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Solid background (fallback for pre-API-26 launchers) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M0,0 h108 v108 h-108 z" />
+    <!-- Speech bubble -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,34 h48 a8,8 0 0 1 8,8 v28 a8,8 0 0 1 -8,8 H50 l-12,12 v-12 H30 a8,8 0 0 1 -8,-8 V42 a8,8 0 0 1 8,-8 z" />
+    <!-- Clock face -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M54,44 m-13,0 a13,13 0 1 0 26,0 a13,13 0 1 0 -26,0" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M54,38 V44 L59,48" />
+</vector>

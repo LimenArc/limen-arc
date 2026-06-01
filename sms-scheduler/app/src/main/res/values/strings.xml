@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SMS Scheduler</string>
+    <string name="new_message">New scheduled text</string>
+    <string name="hint_number">Phone number to text</string>
+    <string name="hint_message">Message content</string>
+    <string name="pick_date">Pick date</string>
+    <string name="pick_time">Pick time</string>
+    <string name="schedule">Schedule text</string>
+    <string name="scheduled_messages">Scheduled &amp; sent</string>
+    <string name="empty_list">No scheduled texts yet.\nFill in the form above to add one.</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+</resources>
