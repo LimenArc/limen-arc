@@ -1,0 +1,21 @@
+{
+  "name": "monster-realm-pal-quest",
+  "version": "1.0.0",
+  "description": "Monster Realm: Pal Quest — open-world RPG with Pal capture and dungeon raids",
+  "scripts": {
+    "serve": "npx serve . -p 3000",
+    "cap:init": "npx cap init \"Monster Realm\" com.limen.monsterrealm --web-dir .",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "build:apk": "npm run cap:sync && npx cap build android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "serve": "^14.0.0"
+  }
+}

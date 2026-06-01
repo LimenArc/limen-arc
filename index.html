@@ -161,6 +161,28 @@
             font-weight: 300;
         }
 
+        /* ── Game link ── */
+        .game-link {
+            display: inline-flex;
+            align-items: center;
+            gap: .6rem;
+            margin-bottom: 1.8rem;
+            padding: .65rem 1.6rem;
+            border: 1px solid rgba(201,168,76,.3);
+            border-radius: 4px;
+            background: rgba(201,168,76,.05);
+            color: var(--gold);
+            font-family: 'Cormorant SC', serif;
+            font-size: .82rem;
+            letter-spacing: .22em;
+            text-decoration: none;
+            transition: background .25s, border-color .25s;
+        }
+        .game-link:hover {
+            background: rgba(201,168,76,.12);
+            border-color: rgba(201,168,76,.55);
+        }
+
         @media (max-width: 480px) {
             html { font-size: 16px; }
         }
@@ -275,6 +297,9 @@
 
 <!-- ════════════════ FOOTER ════════════════ -->
 <footer>
+    <a class="game-link" href="android-game/">
+        ⚔ &nbsp; Play Monster Realm: Pal Quest
+    </a>
     <p class="motto">Exist Carefully &nbsp;·&nbsp; Exist Curiously &nbsp;·&nbsp; Exist Without Apology</p>
 </footer>
 
