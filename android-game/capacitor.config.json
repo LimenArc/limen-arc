@@ -1,7 +1,7 @@
 {
   "appId": "com.limen.monsterrealm",
   "appName": "Monster Realm",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
   },

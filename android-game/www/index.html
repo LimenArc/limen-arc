@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Monster Realm: Pal Quest</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #game-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%; height: 100%;
+    }
+
+    #game-canvas {
+      display: block;
+      /* Letterbox to fit any screen while keeping 400×700 aspect */
+      max-width: 100vw;
+      max-height: 100vh;
+      aspect-ratio: 400 / 700;
+      image-rendering: auto;
+    }
+
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #060610;
+      color: #c0a0ff;
+      font-family: sans-serif;
+      font-size: 18px;
+      z-index: 99;
+      transition: opacity 0.4s;
+    }
+    #loading.hidden { opacity: 0; pointer-events: none; }
+    #loading-bar-bg {
+      width: 200px; height: 6px; background: #222; border-radius: 3px; margin-top: 20px;
+    }
+    #loading-bar {
+      height: 100%; background: #c060ff; border-radius: 3px;
+      animation: loadanim 0.8s ease forwards;
+    }
+    @keyframes loadanim { from { width: 0 } to { width: 100% } }
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div>Monster Realm</div>
+  <div style="font-size:13px;color:#777;margin-top:6px">Pal Quest</div>
+  <div id="loading-bar-bg"><div id="loading-bar"></div></div>
+</div>
+
+<div id="game-wrap">
+  <canvas id="game-canvas" width="400" height="700"></canvas>
+</div>
+
+<script src="game.js"></script>
+<script>
+  window.addEventListener('load', () => {
+    const canvas = document.getElementById('game-canvas');
+    const loading = document.getElementById('loading');
+
+    // Resize canvas to fill screen while keeping aspect ratio
+    function resize() {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const scale = Math.min(vw / 400, vh / 700);
+      canvas.style.width  = (400 * scale) + 'px';
+      canvas.style.height = (700 * scale) + 'px';
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+
+    // Prevent scroll / context menu on canvas
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+    // Start game after short loading animation
+    setTimeout(() => {
+      loading.classList.add('hidden');
+      setTimeout(() => loading.remove(), 400);
+      new window.Game(canvas);
+    }, 900);
+  });
+</script>
+</body>
+</html>
