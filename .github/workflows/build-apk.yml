@@ -2,9 +2,12 @@ name: Build Android APK
 
 on:
   push:
-    branches: [claude/roblox-palworld-game-apk-gyLB6, main]
+    branches: [main]
     paths: ['android-game/**']
-  workflow_dispatch:          # lets you trigger it manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write         # needed to create/update the release
 
 jobs:
   build:
@@ -12,24 +15,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Checkout ────────────────────────────────────────────────────────────
+      # ── Checkout ─────────────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Node ────────────────────────────────────────────────────────────────
+      # ── Node ──────────────────────────────────────────────────────────────────
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # ── Java (Gradle needs 17+) ─────────────────────────────────────────────
+      # ── Java ──────────────────────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Android SDK build-tools ─────────────────────────────────────────────
+      # ── Android SDK ───────────────────────────────────────────────────────────
       - name: Install Android build-tools 34
         run: |
           echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
@@ -37,23 +40,22 @@ jobs:
             "platforms;android-34" \
             "platform-tools" 2>/dev/null || true
 
-      # ── npm deps ────────────────────────────────────────────────────────────
+      # ── npm ───────────────────────────────────────────────────────────────────
       - name: Install npm dependencies
         working-directory: android-game
         run: npm install
 
-      # ── Capacitor: generate Android project ─────────────────────────────────
+      # ── Capacitor ─────────────────────────────────────────────────────────────
       - name: Add Capacitor Android platform
         working-directory: android-game
         run: npx cap add android
 
-      # ── Capacitor: copy web assets into Android project ──────────────────────
       - name: Sync web assets to Android
         working-directory: android-game
         run: npx cap sync android
 
-      # ── Gradle cache (speeds up repeat builds) ───────────────────────────────
-      - name: Cache Gradle packages
+      # ── Gradle cache ──────────────────────────────────────────────────────────
+      - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
@@ -62,16 +64,42 @@ jobs:
           key: gradle-${{ hashFiles('android-game/android/**/*.gradle*', 'android-game/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      # ── Build ────────────────────────────────────────────────────────────────
+      # ── Build ─────────────────────────────────────────────────────────────────
       - name: Build debug APK
         working-directory: android-game/android
         run: ./gradlew assembleDebug --no-daemon
 
-      # ── Upload artifact ──────────────────────────────────────────────────────
-      - name: Upload APK
+      # ── Upload artifact (30-day download in Actions tab) ──────────────────────
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: monster-realm-pal-quest-debug
           path: android-game/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
+
+      # ── Rename APK so the download filename is friendly ──────────────────────
+      - name: Rename APK
+        run: |
+          cp android-game/android/app/build/outputs/apk/debug/app-debug.apk \
+             monster-realm-pal-quest-debug.apk
+
+      # ── Create / update "apk-latest" release with the APK attached ───────────
+      - name: Release APK
+        uses: ncipollo/release-action@v1
+        with:
+          tag: apk-latest
+          name: "Monster Realm: Pal Quest — Latest APK"
+          body: |
+            **Install on Android:**
+            1. Download `monster-realm-pal-quest-debug.apk` below
+            2. On your phone: Settings → Security → enable "Install unknown apps"
+            3. Open the APK and tap Install
+
+            **Play in browser:** https://limenarc.github.io/limen-arc/android-game/
+          artifacts: monster-realm-pal-quest-debug.apk
+          allowUpdates: true
+          removeArtifacts: true
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
