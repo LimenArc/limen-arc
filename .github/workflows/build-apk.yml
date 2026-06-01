@@ -1,0 +1,77 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [claude/roblox-palworld-game-apk-gyLB6, main]
+    paths: ['android-game/**']
+  workflow_dispatch:          # lets you trigger it manually from the Actions tab
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node ────────────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Java (Gradle needs 17+) ─────────────────────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── Android SDK build-tools ─────────────────────────────────────────────
+      - name: Install Android build-tools 34
+        run: |
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "build-tools;34.0.0" \
+            "platforms;android-34" \
+            "platform-tools" 2>/dev/null || true
+
+      # ── npm deps ────────────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        working-directory: android-game
+        run: npm install
+
+      # ── Capacitor: generate Android project ─────────────────────────────────
+      - name: Add Capacitor Android platform
+        working-directory: android-game
+        run: npx cap add android
+
+      # ── Capacitor: copy web assets into Android project ──────────────────────
+      - name: Sync web assets to Android
+        working-directory: android-game
+        run: npx cap sync android
+
+      # ── Gradle cache (speeds up repeat builds) ───────────────────────────────
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android-game/android/**/*.gradle*', 'android-game/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build debug APK
+        working-directory: android-game/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # ── Upload artifact ──────────────────────────────────────────────────────
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: monster-realm-pal-quest-debug
+          path: android-game/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
