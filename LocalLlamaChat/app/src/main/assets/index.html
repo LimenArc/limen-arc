@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>LocalLlamaChat</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-panel: #10151f;
+    --bg-input: #161c28;
+    --border: #232b3a;
+    --text: #d6e2f0;
+    --text-dim: #7c8aa0;
+    --accent: #3ddc97;
+    --accent2: #5fb3ff;
+    --warn: #ffb454;
+    --err: #ff6b6b;
+    --think: #b48cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: 'SF Mono', 'Roboto Mono', 'Consolas', monospace;
+    font-size: 13px;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---------- Top bar ---------- */
+  #topbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  #topbar .title { font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+  #topbar .status-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--err);
+    display: inline-block; margin-right: 4px; flex-shrink: 0;
+  }
+  #topbar .status-dot.ready { background: var(--accent); }
+  #topbar .status-dot.starting { background: var(--warn); }
+  #topbar .model-name {
+    color: var(--text-dim); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 32vw; flex: 1;
+  }
+  #topbar button, .btn {
+    background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 10px; font-family: inherit; font-size: 12px;
+    cursor: pointer;
+  }
+  #topbar button:active, .btn:active { background: var(--border); }
+  #topbar button.primary, .btn.primary { color: var(--accent); border-color: var(--accent); }
+  #topbar button.danger { color: var(--err); border-color: var(--err); }
+
+  /* ---------- Body layout ---------- */
+  #body { display: flex; flex: 1; min-height: 0; }
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  #chat {
+    flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .msg { max-width: 92%; }
+  .msg.user { align-self: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+  .bubble {
+    padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word;
+    line-height: 1.45;
+  }
+  .msg.user .bubble { background: #14304a; border: 1px solid #1d4566; }
+  .msg.assistant .bubble { background: var(--bg-panel); border: 1px solid var(--border); }
+
+  .think-block {
+    border: 1px dashed var(--think); border-radius: 6px; margin-bottom: 6px;
+    background: #1a1530;
+  }
+  .think-header {
+    color: var(--think); padding: 5px 8px; cursor: pointer; font-size: 11px;
+    display: flex; align-items: center; justify-content: space-between;
+    user-select: none;
+  }
+  .think-body {
+    padding: 0 8px 8px 8px; color: #c9b8ff; white-space: pre-wrap; word-wrap: break-word;
+    font-size: 12px; border-top: 1px dashed var(--think);
+    max-height: 400px; overflow-y: auto;
+  }
+  .think-block.collapsed .think-body { display: none; }
+
+  .perf-line {
+    margin-top: 6px; font-size: 10.5px; color: var(--text-dim);
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .perf-line span b { color: var(--accent2); }
+
+  /* ---------- Input bar ---------- */
+  #inputbar {
+    display: flex; gap: 6px; padding: 8px; background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+  }
+  #prompt {
+    flex: 1; resize: none; background: var(--bg-input); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px;
+    font-family: inherit; font-size: 13px; max-height: 120px;
+  }
+  #sendBtn {
+    background: var(--accent); color: #06140e; border: none; border-radius: 6px;
+    padding: 0 16px; font-weight: bold; cursor: pointer; font-size: 13px;
+  }
+  #sendBtn:disabled { opacity: 0.4; }
+  #stopBtn { background: var(--err); color: #1a0707; border: none; border-radius: 6px;
+    padding: 0 12px; font-weight: bold; cursor: pointer; display:none; }
+
+  /* ---------- Context bar ---------- */
+  #ctxbar-wrap {
+    padding: 4px 10px; background: var(--bg-panel); border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--text-dim);
+  }
+  #ctxbar-track {
+    background: var(--bg-input); border-radius: 4px; height: 6px; margin-top: 3px; overflow: hidden;
+  }
+  #ctxbar-fill { background: var(--accent2); height: 100%; width: 0%; transition: width 0.3s; }
+  #ctxbar-fill.warn { background: var(--warn); }
+  #ctxbar-fill.crit { background: var(--err); }
+
+  /* ---------- Right panel ---------- */
+  #panel {
+    width: 320px; max-width: 80vw; background: var(--bg-panel); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; transform: translateX(0); transition: margin-right 0.2s;
+    overflow: hidden;
+  }
+  #panel.hidden { width: 0; border-left: none; }
+  #panelInner { width: 320px; max-width: 80vw; display: flex; flex-direction: column; height: 100%; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab {
+    flex: 1; text-align: center; padding: 8px 4px; cursor: pointer; color: var(--text-dim);
+    font-size: 12px; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-color: var(--accent); }
+
+  .tabpage { flex: 1; overflow-y: auto; padding: 10px; display: none; }
+  .tabpage.active { display: block; }
+
+  .field { margin-bottom: 10px; }
+  .field label {
+    display: flex; justify-content: space-between; color: var(--text-dim); font-size: 11px;
+    margin-bottom: 3px;
+  }
+  .field label .val { color: var(--accent2); }
+  .field input[type=range] { width: 100%; accent-color: var(--accent); }
+  .field input[type=text], .field input[type=number], .field textarea {
+    width: 100%; background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px; font-family: inherit; font-size: 12px;
+  }
+  .field textarea { resize: vertical; min-height: 50px; }
+
+  .section-title {
+    color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 14px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  .kv { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11.5px;
+    border-bottom: 1px solid #182030; gap: 8px; }
+  .kv .k { color: var(--text-dim); }
+  .kv .v { color: var(--text); text-align: right; word-break: break-all; }
+
+  .stoplist { display: flex; flex-direction: column; gap: 4px; }
+  .stoprow { display: flex; gap: 4px; }
+  .stoprow input { flex: 1; }
+  .stoprow button { background: var(--bg-input); color: var(--err); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+  .addstop { background: var(--bg-input); color: var(--accent); border: 1px dashed var(--border);
+    border-radius: 4px; padding: 5px; cursor: pointer; width: 100%; margin-top: 4px; }
+
+  .small-btn { background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #2a3344; border-radius: 3px; }
+
+  .hint { color: var(--text-dim); font-size: 10.5px; margin-top: 4px; line-height: 1.4; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <span class="title">LocalLlamaChat</span>
+    <span><span class="status-dot" id="statusDot"></span><span id="statusText">stopped</span></span>
+    <span class="model-name" id="modelName">no model loaded</span>
+    <button id="pickBtn">Pick .gguf</button>
+    <button id="startBtn" class="primary">Start</button>
+    <button id="stopBtn2" class="danger">Stop</button>
+    <button id="panelToggle">Panel</button>
+  </div>
+
+  <div id="body">
+    <div id="main">
+      <div id="chat"></div>
+
+      <div id="ctxbar-wrap">
+        <div id="ctxbar-label">context: 0 / 0</div>
+        <div id="ctxbar-track"><div id="ctxbar-fill"></div></div>
+      </div>
+
+      <div id="inputbar">
+        <textarea id="prompt" rows="1" placeholder="Type a message..."></textarea>
+        <button id="stopBtn">Stop</button>
+        <button id="sendBtn">Send</button>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div id="panelInner">
+        <div class="tabs">
+          <div class="tab active" data-tab="model">Model</div>
+          <div class="tab" data-tab="guardrails">Guardrails</div>
+          <div class="tab" data-tab="logs">Logs</div>
+        </div>
+
+        <div class="tabpage active" id="tab-model">
+          <div class="section-title">Load model</div>
+          <div class="hint">Pick any .gguf from device storage. The file is copied into app storage, then llama-server is (re)launched with it.</div>
+          <div class="field" style="margin-top:8px;">
+            <label>Extra llama-server args (space separated)</label>
+            <input type="text" id="extraArgs" placeholder="-ngl 99 -t 4 -c 4096">
+          </div>
+          <div class="hint">Default context size if not set above:</div>
+          <div class="field">
+            <label>n_ctx (-c) <span class="val" id="nctxVal">4096</span></label>
+            <input type="range" id="nctx" min="512" max="32768" step="512" value="4096">
+          </div>
+
+          <div class="section-title">Model details (/props)</div>
+          <div id="modelDetails">
+            <div class="hint">No model loaded yet.</div>
+          </div>
+        </div>
+
+        <div class="tabpage" id="tab-guardrails">
+          <div class="section-title">System prompt</div>
+          <div class="field">
+            <textarea id="systemPrompt" rows="4" placeholder="You are a helpful assistant."></textarea>
+          </div>
+
+          <div class="section-title">Sampler</div>
+          <div class="field">
+            <label>temperature <span class="val" id="temperatureVal">0.8</span></label>
+            <input type="range" id="temperature" min="0" max="2" step="0.01" value="0.8">
+          </div>
+          <div class="field">
+            <label>top_p <span class="val" id="top_pVal">0.95</span></label>
+            <input type="range" id="top_p" min="0" max="1" step="0.01" value="0.95">
+          </div>
+          <div class="field">
+            <label>top_k <span class="val" id="top_kVal">40</span></label>
+            <input type="range" id="top_k" min="0" max="200" step="1" value="40">
+          </div>
+          <div class="field">
+            <label>min_p <span class="val" id="min_pVal">0.05</span></label>
+            <input type="range" id="min_p" min="0" max="1" step="0.01" value="0.05">
+          </div>
+          <div class="field">
+            <label>repeat_penalty <span class="val" id="repeat_penaltyVal">1.1</span></label>
+            <input type="range" id="repeat_penalty" min="0" max="2" step="0.01" value="1.1">
+          </div>
+          <div class="field">
+            <label>presence_penalty <span class="val" id="presence_penaltyVal">0</span></label>
+            <input type="range" id="presence_penalty" min="-2" max="2" step="0.01" value="0">
+          </div>
+          <div class="field">
+            <label>frequency_penalty <span class="val" id="frequency_penaltyVal">0</span></label>
+            <input type="range" id="frequency_penalty" min="-2" max="2" step="0.01" value="0">
+          </div>
+          <div class="field">
+            <label>max_tokens <span class="val" id="max_tokensVal">512</span></label>
+            <input type="range" id="max_tokens" min="16" max="4096" step="16" value="512">
+          </div>
+          <div class="field">
+            <label>seed (-1 = random)</label>
+            <input type="number" id="seed" value="-1">
+          </div>
+
+          <div class="section-title">Stop sequences</div>
+          <div class="stoplist" id="stopList"></div>
+          <button class="addstop" id="addStop">+ add stop sequence</button>
+
+          <div class="section-title">Constrained output</div>
+          <div class="field">
+            <label>Mode</label>
+            <select id="constraintMode" style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;">
+              <option value="none">None</option>
+              <option value="grammar">GBNF grammar</option>
+              <option value="json_schema">JSON schema</option>
+            </select>
+          </div>
+          <div class="field">
+            <textarea id="constraintText" rows="5" placeholder="Paste GBNF grammar or JSON schema here"></textarea>
+          </div>
+
+          <div class="section-title">Streaming endpoint</div>
+          <div class="field">
+            <select id="endpointMode" style="width:100%;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px;">
+              <option value="chat">/v1/chat/completions (chat template)</option>
+              <option value="completion">/completion (raw prompt)</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <button class="small-btn" id="resetSettings">Reset to defaults</button>
+            <button class="small-btn" id="clearChat">Clear chat</button>
+          </div>
+        </div>
+
+        <div class="tabpage" id="tab-logs">
+          <div class="section-title">Server log</div>
+          <pre id="serverLog" style="white-space:pre-wrap;font-size:10px;color:var(--text-dim);max-height:70vh;overflow-y:auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ----------------------------------------------------------------
+  // State & persisted settings
+  // ----------------------------------------------------------------
+  var DEFAULTS = {
+    systemPrompt: 'You are a helpful assistant.',
+    temperature: 0.8,
+    top_p: 0.95,
+    top_k: 40,
+    min_p: 0.05,
+    repeat_penalty: 1.1,
+    presence_penalty: 0,
+    frequency_penalty: 0,
+    max_tokens: 512,
+    seed: -1,
+    stopSequences: [],
+    constraintMode: 'none',
+    constraintText: '',
+    endpointMode: 'chat',
+    extraArgs: '',
+    nctx: 4096,
+    lastModelPath: ''
+  };
+
+  var settings = loadSettings();
+  var serverPort = -1;
+  var serverReady = false;
+  var nCtx = 0;
+  var totalTokensUsed = 0;
+  var chatHistory = []; // {role, content}
+  var currentAbort = null; // fetch AbortController for in-flight request
+
+  function loadSettings() {
+    var out = {};
+    for (var k in DEFAULTS) out[k] = DEFAULTS[k];
+    try {
+      var raw = localStorage.getItem('llc_settings');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        for (var k2 in parsed) out[k2] = parsed[k2];
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem('llc_settings', JSON.stringify(settings)); } catch (e) {}
+  }
+
+  // ----------------------------------------------------------------
+  // DOM helpers
+  // ----------------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      if (k === 'class') e.className = attrs[k];
+      else if (k === 'text') e.textContent = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    }
+    if (children) children.forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+
+  // ----------------------------------------------------------------
+  // Tabs
+  // ----------------------------------------------------------------
+  document.querySelectorAll('.tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tabpage').forEach(function (p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      $('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  $('panelToggle').addEventListener('click', function () {
+    $('panel').classList.toggle('hidden');
+  });
+
+  // ----------------------------------------------------------------
+  // Guardrail field bindings
+  // ----------------------------------------------------------------
+  var SLIDER_FIELDS = ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty',
+    'presence_penalty', 'frequency_penalty', 'max_tokens'];
+
+  function initGuardrailUI() {
+    $('systemPrompt').value = settings.systemPrompt;
+    SLIDER_FIELDS.forEach(function (f) {
+      var input = $(f);
+      input.value = settings[f];
+      $(f + 'Val').textContent = settings[f];
+      input.addEventListener('input', function () {
+        settings[f] = parseFloat(input.value);
+        $(f + 'Val').textContent = input.value;
+        saveSettings();
+      });
+    });
+    $('seed').value = settings.seed;
+    $('seed').addEventListener('change', function () {
+      settings.seed = parseInt($('seed').value, 10) || -1;
+      saveSettings();
+    });
+    $('systemPrompt').addEventListener('change', function () {
+      settings.systemPrompt = $('systemPrompt').value;
+      saveSettings();
+    });
+    $('constraintMode').value = settings.constraintMode;
+    $('constraintText').value = settings.constraintText;
+    $('constraintMode').addEventListener('change', function () {
+      settings.constraintMode = $('constraintMode').value;
+      saveSettings();
+    });
+    $('constraintText').addEventListener('change', function () {
+      settings.constraintText = $('constraintText').value;
+      saveSettings();
+    });
+    $('endpointMode').value = settings.endpointMode;
+    $('endpointMode').addEventListener('change', function () {
+      settings.endpointMode = $('endpointMode').value;
+      saveSettings();
+    });
+    $('extraArgs').value = settings.extraArgs;
+    $('extraArgs').addEventListener('change', function () {
+      settings.extraArgs = $('extraArgs').value;
+      saveSettings();
+    });
+    $('nctx').value = settings.nctx;
+    $('nctxVal').textContent = settings.nctx;
+    $('nctx').addEventListener('input', function () {
+      settings.nctx = parseInt($('nctx').value, 10);
+      $('nctxVal').textContent = settings.nctx;
+      saveSettings();
+    });
+
+    renderStopList();
+
+    $('addStop').addEventListener('click', function () {
+      settings.stopSequences.push('');
+      saveSettings();
+      renderStopList();
+    });
+
+    $('resetSettings').addEventListener('click', function () {
+      if (!confirm('Reset all guardrail settings to defaults?')) return;
+      var keepLast = settings.lastModelPath;
+      settings = JSON.parse(JSON.stringify(DEFAULTS));
+      settings.lastModelPath = keepLast;
+      saveSettings();
+      initGuardrailUI();
+    });
+
+    $('clearChat').addEventListener('click', function () {
+      if (!confirm('Clear chat history?')) return;
+      chatHistory = [];
+      totalTokensUsed = 0;
+      $('chat').innerHTML = '';
+      updateCtxBar();
+    });
+  }
+
+  function renderStopList() {
+    var list = $('stopList');
+    list.innerHTML = '';
+    settings.stopSequences.forEach(function (seq, idx) {
+      var row = el('div', { class: 'stoprow' });
+      var input = el('input', { type: 'text', value: seq });
+      input.value = seq;
+      input.addEventListener('change', function () {
+        settings.stopSequences[idx] = input.value;
+        saveSettings();
+      });
+      var rm = el('button', { text: '×' });
+      rm.addEventListener('click', function () {
+        settings.stopSequences.splice(idx, 1);
+        saveSettings();
+        renderStopList();
+      });
+      row.appendChild(input);
+      row.appendChild(rm);
+      list.appendChild(row);
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Server status / lifecycle
+  // ----------------------------------------------------------------
+  function setStatus(text, cls) {
+    $('statusText').textContent = text;
+    var dot = $('statusDot');
+    dot.className = 'status-dot' + (cls ? ' ' + cls : '');
+  }
+
+  window.onServerStatus = function (status) {
+    appendLog('[status] ' + status);
+    if (status === 'starting') setStatus('starting', 'starting');
+    else if (status === 'ready') { setStatus('ready', 'ready'); }
+    else if (status.indexOf('error') === 0) setStatus(status, '');
+    else setStatus(status, '');
+  };
+
+  window.onServerLog = function (line) {
+    appendLog(line);
+  };
+
+  window.onServerReady = function (portStr) {
+    serverPort = parseInt(portStr, 10);
+    serverReady = true;
+    setStatus('ready', 'ready');
+    fetchProps();
+  };
+
+  window.onServerStopped = function (exitCodeStr) {
+    serverReady = false;
+    serverPort = -1;
+    setStatus('stopped (exit ' + exitCodeStr + ')', '');
+  };
+
+  window.onModelPicked = function (path) {
+    settings.lastModelPath = path;
+    saveSettings();
+    $('modelName').textContent = path.split('/').pop();
+    appendLog('[picker] copied model to ' + path);
+    launchServer(path);
+  };
+
+  window.onModelPickError = function (msg) {
+    appendLog('[picker] error: ' + msg);
+    setStatus('error: ' + msg, '');
+  };
+
+  window.onModelCopyProgress = function (bytesStr) {
+    setStatus('copying model... ' + (Math.round(parseInt(bytesStr, 10) / 1048576)) + ' MB', 'starting');
+  };
+
+  function appendLog(line) {
+    var pre = $('serverLog');
+    pre.textContent += line + '\n';
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function launchServer(modelPath) {
+    var args = [];
+    var nctx = settings.nctx;
+    var extra = settings.extraArgs.trim();
+    var hasC = /(^|\s)-c(\s|$)|--ctx-size/.test(extra);
+    if (!hasC && nctx) {
+      args.push('-c', String(nctx));
+    }
+    // Recommended flags for chat-template handling and reasoning_content
+    // splitting -- only supported on newer llama.cpp builds. If startup
+    // fails, remove "--jinja" / "--reasoning-format" from extraArgs.
+    args.push('--jinja');
+    if (extra) {
+      extra.split(/\s+/).forEach(function (a) { if (a) args.push(a); });
+    }
+    setStatus('starting', 'starting');
+    Android.startServer(modelPath, JSON.stringify(args));
+  }
+
+  $('pickBtn').addEventListener('click', function () { Android.pickModel(); });
+
+  $('startBtn').addEventListener('click', function () {
+    var path = settings.lastModelPath;
+    if (!path) { Android.pickModel(); return; }
+    launchServer(path);
+  });
+
+  $('stopBtn2').addEventListener('click', function () {
+    Android.stopServer();
+  });
+
+  // ----------------------------------------------------------------
+  // /props -> model details panel
+  // ----------------------------------------------------------------
+  function fetchProps() {
+    fetch('http://127.0.0.1:' + serverPort + '/props')
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderModelDetails(data); })
+      .catch(function (e) { appendLog('[props] error: ' + e); });
+  }
+
+  function renderModelDetails(props) {
+    var box = $('modelDetails');
+    box.innerHTML = '';
+
+    var meta = props.default_generation_settings && props.default_generation_settings.model
+      ? props.default_generation_settings.model : (props.model || '');
+
+    var ctx = props.n_ctx || (props.default_generation_settings && props.default_generation_settings.n_ctx) || 0;
+    nCtx = ctx || nCtx || settings.nctx;
+
+    var modelDisplay = (meta || settings.lastModelPath || '').toString().split('/').pop();
+    $('modelName').textContent = modelDisplay || 'model loaded';
+
+    var rows = [
+      ['name', modelDisplay],
+      ['n_ctx', ctx],
+      ['n_params', props.model_params || props.n_params || fmtFromMeta(props, 'n_params')],
+      ['n_vocab', props.n_vocab || fmtFromMeta(props, 'n_vocab')],
+      ['architecture', fmtFromMeta(props, 'architecture')],
+      ['quantization', fmtFromMeta(props, 'general.file_type') || fmtFromMeta(props, 'quantization')],
+      ['BOS token', tokenStr(props, 'bos')],
+      ['EOS token', tokenStr(props, 'eos')]
+    ];
+
+    rows.forEach(function (pair) {
+      if (pair[1] === undefined || pair[1] === null || pair[1] === '') return;
+      box.appendChild(el('div', { class: 'kv' }, [
+        el('span', { class: 'k', text: pair[0] }),
+        el('span', { class: 'v', text: String(pair[1]) })
+      ]));
+    });
+
+    var tmpl = props.chat_template;
+    if (tmpl) {
+      var head = el('div', { class: 'think-header', text: 'chat_template (tap to expand)' });
+      var body = el('div', { class: 'think-body', text: tmpl });
+      var block = el('div', { class: 'think-block collapsed' }, [head, body]);
+      head.addEventListener('click', function () { block.classList.toggle('collapsed'); });
+      box.appendChild(el('div', { class: 'section-title', text: 'Chat template' }));
+      box.appendChild(block);
+    }
+
+    updateCtxBar();
+  }
+
+  function fmtFromMeta(props, key) {
+    if (props.meta && props.meta.hasOwnProperty(key)) return props.meta[key];
+    if (props.model_meta && props.model_meta.hasOwnProperty(key)) return props.model_meta[key];
+    // llama.cpp /props sometimes nests vocab/arch info under "general.*"
+    var alt = 'general.' + key;
+    if (props.meta && props.meta.hasOwnProperty(alt)) return props.meta[alt];
+    return undefined;
+  }
+
+  function tokenStr(props, which) {
+    var idKey = which + '_token';
+    var id = props[idKey];
+    if (id === undefined && props.model_meta) id = props.model_meta[idKey];
+    if (id === undefined) return undefined;
+    return String(id);
+  }
+
+  // ----------------------------------------------------------------
+  // Context usage bar
+  // ----------------------------------------------------------------
+  function updateCtxBar() {
+    var ctx = nCtx || settings.nctx || 0;
+    var label = $('ctxbar-label');
+    var fill = $('ctxbar-fill');
+    if (!ctx) {
+      label.textContent = 'context: ' + totalTokensUsed + ' / ?';
+      fill.style.width = '0%';
+      return;
+    }
+    var pct = Math.min(100, (totalTokensUsed / ctx) * 100);
+    label.textContent = 'context: ' + totalTokensUsed + ' / ' + ctx + '  (' + pct.toFixed(1) + '%)';
+    fill.style.width = pct + '%';
+    fill.classList.remove('warn', 'crit');
+    if (pct > 90) fill.classList.add('crit');
+    else if (pct > 70) fill.classList.add('warn');
+  }
+
+  // ----------------------------------------------------------------
+  // Chat rendering
+  // ----------------------------------------------------------------
+  function addUserMessage(text) {
+    var bubble = el('div', { class: 'bubble', text: text });
+    var msg = el('div', { class: 'msg user' }, [bubble]);
+    $('chat').appendChild(msg);
+    scrollChat();
+  }
+
+  function createAssistantMessage() {
+    var thinkBlock = el('div', { class: 'think-block collapsed' });
+    var thinkHeader = el('div', { class: 'think-header' }, [
+      el('span', { text: 'reasoning' }),
+      el('span', { text: '▾', class: 'chev' })
+    ]);
+    var thinkBody = el('div', { class: 'think-body' });
+    thinkBlock.appendChild(thinkHeader);
+    thinkBlock.appendChild(thinkBody);
+    thinkBlock.style.display = 'none';
+    thinkHeader.addEventListener('click', function () { thinkBlock.classList.toggle('collapsed'); });
+
+    var answerEl = el('div', { class: 'bubble' });
+    var perfLine = el('div', { class: 'perf-line' });
+
+    var msg = el('div', { class: 'msg assistant' }, [thinkBlock, answerEl, perfLine]);
+    $('chat').appendChild(msg);
+    scrollChat();
+
+    return {
+      msg: msg,
+      thinkBlock: thinkBlock,
+      thinkBody: thinkBody,
+      answerEl: answerEl,
+      perfLine: perfLine
+    };
+  }
+
+  function scrollChat() {
+    var chat = $('chat');
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function renderPerf(perfLine, stats) {
+    perfLine.innerHTML = '';
+    function add(label, val) {
+      perfLine.appendChild(el('span', {}, [
+        document.createTextNode(label + ': '),
+        el('b', { text: val })
+      ]));
+    }
+    if (stats.promptTokens != null) add('prompt', String(stats.promptTokens));
+    if (stats.completionTokens != null) add('completion', String(stats.completionTokens));
+    if (stats.totalTokens != null) add('total', String(stats.totalTokens));
+    if (stats.promptTps != null) add('prompt t/s', stats.promptTps.toFixed(1));
+    if (stats.evalTps != null) add('eval t/s', stats.evalTps.toFixed(1));
+    if (stats.ttftMs != null) add('TTFT', stats.ttftMs.toFixed(0) + 'ms');
+  }
+
+  // ----------------------------------------------------------------
+  // <think>...</think> streaming-safe splitter
+  // ----------------------------------------------------------------
+  function makeThinkSplitter() {
+    var buffer = '';
+    var inThink = false;
+    return function (chunk) {
+      buffer += chunk;
+      var reasoning = '';
+      var answer = '';
+      while (buffer.length) {
+        if (!inThink) {
+          var start = buffer.indexOf('<think>');
+          if (start === -1) {
+            // keep a small tail in case "<think>" is split across chunks
+            var tail = Math.min(buffer.length, 7);
+            answer += buffer.slice(0, buffer.length - tail);
+            buffer = buffer.slice(buffer.length - tail);
+            break;
+          } else {
+            answer += buffer.slice(0, start);
+            buffer = buffer.slice(start + '<think>'.length);
+            inThink = true;
+          }
+        } else {
+          var end = buffer.indexOf('</think>');
+          if (end === -1) {
+            var tail2 = Math.min(buffer.length, 8);
+            reasoning += buffer.slice(0, buffer.length - tail2);
+            buffer = buffer.slice(buffer.length - tail2);
+            break;
+          } else {
+            reasoning += buffer.slice(0, end);
+            buffer = buffer.slice(end + '</think>'.length);
+            inThink = false;
+          }
+        }
+      }
+      return { reasoning: reasoning, answer: answer };
+    };
+  }
+
+  // ----------------------------------------------------------------
+  // Send / streaming
+  // ----------------------------------------------------------------
+  $('prompt').addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(120, this.scrollHeight) + 'px';
+  });
+
+  $('prompt').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  $('sendBtn').addEventListener('click', sendMessage);
+  $('stopBtn').addEventListener('click', function () {
+    if (currentAbort) currentAbort.abort();
+  });
+
+  function buildSamplerParams() {
+    var p = {
+      temperature: settings.temperature,
+      top_p: settings.top_p,
+      top_k: settings.top_k,
+      min_p: settings.min_p,
+      repeat_penalty: settings.repeat_penalty,
+      presence_penalty: settings.presence_penalty,
+      frequency_penalty: settings.frequency_penalty,
+      max_tokens: settings.max_tokens,
+      n_predict: settings.max_tokens
+    };
+    if (settings.seed !== undefined && settings.seed !== null && settings.seed >= 0) {
+      p.seed = settings.seed;
+    }
+    var stops = settings.stopSequences.filter(function (s) { return s && s.length; });
+    if (stops.length) p.stop = stops;
+
+    if (settings.constraintMode === 'grammar' && settings.constraintText.trim()) {
+      p.grammar = settings.constraintText;
+    } else if (settings.constraintMode === 'json_schema' && settings.constraintText.trim()) {
+      try {
+        var schema = JSON.parse(settings.constraintText);
+        p.response_format = { type: 'json_schema', json_schema: { name: 'response', schema: schema, strict: true } };
+        // also set json_schema directly for /completion-style endpoints
+        p.json_schema = schema;
+      } catch (e) {
+        appendLog('[guardrails] invalid JSON schema: ' + e);
+      }
+    }
+    return p;
+  }
+
+  function sendMessage() {
+    var promptEl = $('prompt');
+    var text = promptEl.value.trim();
+    if (!text) return;
+    if (!serverReady || serverPort < 0) {
+      alert('Server is not ready yet.');
+      return;
+    }
+
+    addUserMessage(text);
+    chatHistory.push({ role: 'user', content: text });
+    promptEl.value = '';
+    promptEl.style.height = 'auto';
+
+    var ui = createAssistantMessage();
+    var splitter = makeThinkSplitter();
+    var reasoningText = '';
+    var answerText = '';
+    var sawReasoningField = false;
+
+    var startTime = performance.now();
+    var firstTokenTime = null;
+
+    $('sendBtn').disabled = true;
+    $('stopBtn').style.display = 'inline-block';
+    var controller = new AbortController();
+    currentAbort = controller;
+
+    var params = buildSamplerParams();
+    var body, url;
+
+    if (settings.endpointMode === 'completion') {
+      url = 'http://127.0.0.1:' + serverPort + '/completion';
+      var fullPrompt = '';
+      if (settings.systemPrompt.trim()) fullPrompt += settings.systemPrompt.trim() + '\n\n';
+      chatHistory.forEach(function (m) {
+        fullPrompt += (m.role === 'user' ? 'User: ' : 'Assistant: ') + m.content + '\n';
+      });
+      fullPrompt += 'Assistant: ';
+      body = Object.assign({}, params, { prompt: fullPrompt, stream: true });
+    } else {
+      url = 'http://127.0.0.1:' + serverPort + '/v1/chat/completions';
+      var messages = [];
+      if (settings.systemPrompt.trim()) messages.push({ role: 'system', content: settings.systemPrompt.trim() });
+      chatHistory.forEach(function (m) { messages.push({ role: m.role, content: m.content }); });
+      body = Object.assign({}, params, { messages: messages, stream: true, stream_options: { include_usage: true } });
+    }
+
+    var perfStats = {};
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    }).then(function (resp) {
+      if (!resp.ok) {
+        return resp.text().then(function (t) { throw new Error('HTTP ' + resp.status + ': ' + t); });
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder('utf-8');
+      var buffer = '';
+
+      function pump() {
+        return reader.read().then(function (result) {
+          if (result.done) {
+            finish();
+            return;
+          }
+          buffer += decoder.decode(result.value, { stream: true });
+          var lines = buffer.split('\n');
+          buffer = lines.pop();
+          lines.forEach(handleLine);
+          return pump();
+        });
+      }
+
+      function handleLine(line) {
+        line = line.trim();
+        if (!line) return;
+        if (!line.startsWith('data:')) return;
+        var data = line.slice(5).trim();
+        if (data === '[DONE]') return;
+        var json;
+        try { json = JSON.parse(data); } catch (e) { return; }
+
+        if (firstTokenTime === null) {
+          firstTokenTime = performance.now();
+          perfStats.ttftMs = firstTokenTime - startTime;
+        }
+
+        var deltaContent = '';
+        var deltaReasoning = '';
+
+        if (json.choices && json.choices.length) {
+          var choice = json.choices[0];
+          var delta = choice.delta || {};
+          if (delta.reasoning_content) {
+            deltaReasoning += delta.reasoning_content;
+            sawReasoningField = true;
+          }
+          if (delta.content) deltaContent += delta.content;
+          // /completion-style fallback
+          if (json.content && !choice.delta) deltaContent += json.content;
+        } else if (json.content !== undefined) {
+          deltaContent += json.content;
+        }
+
+        if (!sawReasoningField && deltaContent) {
+          var split = splitter(deltaContent);
+          deltaReasoning += split.reasoning;
+          deltaContent = split.answer;
+        }
+
+        if (deltaReasoning) {
+          reasoningText += deltaReasoning;
+          ui.thinkBlock.style.display = 'block';
+          ui.thinkBody.textContent = reasoningText;
+        }
+        if (deltaContent) {
+          answerText += deltaContent;
+          ui.answerEl.textContent = answerText;
+          scrollChat();
+        }
+
+        // timings (llama.cpp /completion + some /v1 builds emit this per-chunk or on final chunk)
+        if (json.timings) {
+          extractTimings(json.timings, perfStats);
+        }
+        if (json.usage) {
+          extractUsage(json.usage, perfStats);
+        }
+        if (json.prompt_n !== undefined) perfStats.promptTokens = json.prompt_n;
+
+        renderPerf(ui.perfLine, perfStats);
+      }
+
+      return pump();
+    }).catch(function (err) {
+      if (err.name === 'AbortError') {
+        ui.answerEl.textContent = answerText + '\n[stopped]';
+      } else {
+        ui.answerEl.textContent = answerText + '\n[error: ' + err.message + ']';
+        appendLog('[chat] error: ' + err.message);
+      }
+      finish();
+    });
+
+    function extractTimings(t, stats) {
+      // llama.cpp /completion "timings" object:
+      // prompt_n, prompt_ms, prompt_per_second, predicted_n, predicted_ms, predicted_per_second
+      if (t.prompt_n !== undefined) stats.promptTokens = t.prompt_n;
+      if (t.predicted_n !== undefined) stats.completionTokens = t.predicted_n;
+      if (t.prompt_per_second !== undefined) stats.promptTps = t.prompt_per_second;
+      else if (t.prompt_n !== undefined && t.prompt_ms) stats.promptTps = t.prompt_n / (t.prompt_ms / 1000);
+      if (t.predicted_per_second !== undefined) stats.evalTps = t.predicted_per_second;
+      else if (t.predicted_n !== undefined && t.predicted_ms) stats.evalTps = t.predicted_n / (t.predicted_ms / 1000);
+      if (stats.promptTokens != null && stats.completionTokens != null) {
+        stats.totalTokens = stats.promptTokens + stats.completionTokens;
+      }
+    }
+
+    function extractUsage(u, stats) {
+      if (u.prompt_tokens !== undefined) stats.promptTokens = u.prompt_tokens;
+      if (u.completion_tokens !== undefined) stats.completionTokens = u.completion_tokens;
+      if (u.total_tokens !== undefined) stats.totalTokens = u.total_tokens;
+    }
+
+    function finish() {
+      $('sendBtn').disabled = false;
+      $('stopBtn').style.display = 'none';
+      currentAbort = null;
+
+      if (perfStats.ttftMs == null && firstTokenTime != null) {
+        perfStats.ttftMs = firstTokenTime - startTime;
+      }
+      // Fallback: if backend never sent timings/usage, estimate eval t/s
+      // from wall-clock + a rough token count (1 token ~= 4 chars).
+      if (perfStats.evalTps == null && firstTokenTime != null) {
+        var elapsedS = (performance.now() - firstTokenTime) / 1000;
+        var approxTokens = Math.max(1, Math.round(answerText.length / 4));
+        if (elapsedS > 0) {
+          perfStats.evalTps = approxTokens / elapsedS;
+          if (perfStats.completionTokens == null) perfStats.completionTokens = approxTokens;
+        }
+      }
+      renderPerf(ui.perfLine, perfStats);
+
+      if (perfStats.totalTokens != null) {
+        totalTokensUsed = perfStats.totalTokens;
+      } else if (perfStats.promptTokens != null && perfStats.completionTokens != null) {
+        totalTokensUsed = perfStats.promptTokens + perfStats.completionTokens;
+      } else {
+        totalTokensUsed += Math.round((text.length + answerText.length) / 4);
+      }
+      updateCtxBar();
+
+      if (answerText.trim()) {
+        chatHistory.push({ role: 'assistant', content: answerText });
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Init
+  // ----------------------------------------------------------------
+  function init() {
+    initGuardrailUI();
+
+    if (typeof Android !== 'undefined') {
+      try {
+        var status = JSON.parse(Android.getStatus());
+        if (status.running) {
+          serverPort = status.port;
+          serverReady = true;
+          setStatus('ready', 'ready');
+          if (status.modelPath) {
+            $('modelName').textContent = status.modelPath.split('/').pop();
+          }
+          fetchProps();
+        }
+      } catch (e) {}
+
+      if (settings.lastModelPath) {
+        $('modelName').textContent = settings.lastModelPath.split('/').pop() + ' (not started)';
+      }
+    }
+
+    updateCtxBar();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
