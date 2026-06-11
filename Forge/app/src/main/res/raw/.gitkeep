@@ -1,0 +1,5 @@
+This directory is intentionally (mostly) empty in source control.
+
+`template.apk` is generated here by the `:app:copyTemplateApk` Gradle task,
+which builds `:template-app` and copies its output APK into this folder
+before resources are merged. See app/build.gradle.kts.
