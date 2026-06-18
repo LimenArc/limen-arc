@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local ItemData = require(Modules:WaitForChild("ItemData"))
 local MonsterData = require(Modules:WaitForChild("MonsterData"))
+local UiKit = require(Modules:WaitForChild("UiKit"))
 local Remotes = require(ReplicatedStorage:WaitForChild("Remotes"))
 
 local player = Players.LocalPlayer
@@ -30,6 +31,8 @@ frame.BorderSizePixel = 0
 frame.Parent = screen
 
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+UiKit.AddCloseButton(frame)
 
 local header = Instance.new("TextLabel")
 header.Size = UDim2.new(1, 0, 0, 40)

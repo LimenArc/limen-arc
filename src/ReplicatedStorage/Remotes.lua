@@ -37,6 +37,14 @@ local Events = {
 	"TradeUpdate",          -- server → client: full session snapshot
 	"TradeIncoming",        -- server → client: someone wants to trade
 	"TradeEnded",           -- server → client: session closed (success/cancel)
+
+	-- Quests & story
+	"AcceptQuest",          -- client → server: accept a quest from an NPC
+	"TalkNpc",              -- client → server: "I'm talking to NPC X"
+	"PlayIntro",            -- server → client: show opening story
+	"PlayEnding",           -- server → client: show ending cutscene
+	"DialogueLines",        -- server → client: { NpcId, Name, Lines, OfferedQuests, ActiveQuests }
+	"IntroSeen",            -- client → server: I finished / skipped the intro
 }
 
 local Functions = {

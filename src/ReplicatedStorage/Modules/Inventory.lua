@@ -15,6 +15,11 @@ export type CaughtMonster = {
 	MaxHP: number,
 }
 
+export type QuestProgress = {
+	Status: "Active" | "Completed",
+	Progress: { [string]: number }, -- keyed by Objective.Id
+}
+
 export type PlayerSave = {
 	Coins: number,
 	Items: { ItemStack },
@@ -22,6 +27,16 @@ export type PlayerSave = {
 	ActiveMonsterUuid: string?,
 	EquippedWeaponId: string?,
 	DiscoveredMonsters: { [string]: boolean },
+	-- Story / quest state.
+	Quests: { [string]: QuestProgress },
+	LifetimeCoins: number,          -- total ever earned (for Dominion)
+	LifetimeSpent: number,          -- total ever spent at market (for side quest)
+	VisitedLocations: { [string]: boolean }, -- e.g. "Lake1", "Lake2"
+	DefeatedByType: { [string]: number },    -- "Dark" -> count
+	DefeatedTotal: number,
+	TalkedNpcs: { [string]: boolean },
+	IntroSeen: boolean,
+	EndingAchieved: string?,
 }
 
 local Inventory = {}
@@ -34,7 +49,30 @@ function Inventory.NewSave(startingCoins: number): PlayerSave
 		ActiveMonsterUuid = nil,
 		EquippedWeaponId = nil,
 		DiscoveredMonsters = {},
+		Quests = {},
+		LifetimeCoins = 0,
+		LifetimeSpent = 0,
+		VisitedLocations = {},
+		DefeatedByType = {},
+		DefeatedTotal = 0,
+		TalkedNpcs = {},
+		IntroSeen = false,
+		EndingAchieved = nil,
 	}
+end
+
+-- Old saves from before the quest system. Used when loading from DataStore
+-- so existing players get the new fields without resetting their progress.
+function Inventory.MigrateSave(save: any): PlayerSave
+	save.Quests = save.Quests or {}
+	save.LifetimeCoins = save.LifetimeCoins or save.Coins or 0
+	save.LifetimeSpent = save.LifetimeSpent or 0
+	save.VisitedLocations = save.VisitedLocations or {}
+	save.DefeatedByType = save.DefeatedByType or {}
+	save.DefeatedTotal = save.DefeatedTotal or 0
+	save.TalkedNpcs = save.TalkedNpcs or {}
+	save.IntroSeen = save.IntroSeen or false
+	return save
 end
 
 function Inventory.AddItem(save: PlayerSave, itemId: string, count: number): boolean

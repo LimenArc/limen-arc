@@ -68,6 +68,9 @@ Remotes.Events.CombatAttack.OnServerEvent:Connect(function(player, target)
 	if humanoid.Health <= 0 and def then
 		_G.PlayerData.AddCoins(player, math.floor(def.CoinValue * 0.4))
 		Remotes.Events.Notify:FireClient(player, ("Defeated %s. +%d coins"):format(def.DisplayName, math.floor(def.CoinValue * 0.4)))
+		if _G.Quests then
+			_G.Quests.OnMonsterDefeated(player, def.Id, def.Types)
+		end
 	end
 end)
 
